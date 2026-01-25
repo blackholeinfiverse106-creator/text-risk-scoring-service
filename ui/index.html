@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Text Risk Scoring Service</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+    <header>
+        <h1>Text Risk Scoring Service</h1>
+        <p>Deterministic AI Decision System</p>
+    </header>
+
+    <main>
+        <textarea id="inputText" placeholder="Enter text to analyze..."></textarea>
+
+        <button onclick="analyzeText()">Analyze Risk</button>
+
+        <div id="result" class="result hidden">
+            <div class="score-box">
+                <span>Risk Score</span>
+                <h2 id="riskScore">0.0</h2>
+            </div>
+
+            <div id="riskBadge" class="badge">LOW</div>
+
+            <div class="reasons">
+                <h3>Trigger Reasons</h3>
+                <ul id="reasonsList"></ul>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <p>Application-Layer AI • Explainable • Deterministic</p>
+    </footer>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
