@@ -55,3 +55,15 @@ This system is designed for:
 
 It is not intended for autonomous decision-making
 or legal, medical, or psychological diagnosis.
+
+## Guarantees Under Adversarial Conditions
+
+The system guarantees:
+- Deterministic behavior even under adversarial input
+- Stable output under repeated execution
+- Bounded scoring regardless of keyword saturation
+
+The system does NOT guarantee:
+- Accurate intent detection under adversarial phrasing
+- Robustness against semantic obfuscation
+- Correct interpretation of ambiguous language
