@@ -19,9 +19,16 @@
         <button onclick="analyzeText()">Analyze Risk</button>
 
         <div id="result" class="result hidden">
-            <div class="score-box">
-                <span>Risk Score</span>
-                <h2 id="riskScore">0.0</h2>
+            <div class="score-container">
+                <div class="score-box">
+                    <span>Risk Score</span>
+                    <h2 id="riskScore">0.0</h2>
+                </div>
+
+                <div class="score-box">
+                    <span>Confidence Score</span>
+                    <h2 id="confidenceScore">N/A</h2>
+                </div>
             </div>
 
             <div id="riskBadge" class="badge">LOW</div>
@@ -34,11 +41,10 @@
     </main>
 
     <footer>
-        <p>Application-Layer AI • Explainable • Deterministic</p>
+        <p>Application-Layer AI • Explainable • Deterministic • Uncertainty-Aware</p>
     </footer>
 </div>
 
 <script src="script.js"></script>
 </body>
 </html>
- 

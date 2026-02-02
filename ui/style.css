@@ -76,6 +76,13 @@ button:hover {
     display: none;
 }
 
+/* NEW */
+.score-container {
+    display: flex;
+    justify-content: space-around;
+    gap: 20px;
+}
+
 .score-box {
     text-align: center;
 }
@@ -87,11 +94,16 @@ button:hover {
 
 .score-box h2 {
     margin: 5px 0;
-    font-size: 36px;
+    font-size: 32px;
+}
+
+#confidenceScore {
+    color: #2563eb;
+    font-weight: bold;
 }
 
 .badge {
-    margin: 15px auto;
+    margin: 18px auto;
     width: fit-content;
     padding: 8px 18px;
     border-radius: 20px;

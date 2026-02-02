@@ -13,19 +13,24 @@ async function analyzeText() {
 
     document.getElementById("result").classList.remove("hidden");
 
-    // Score
-    document.getElementById("riskScore").innerText = data.risk_score;
+    // Risk score
+    document.getElementById("riskScore").innerText =
+        data.risk_score !== undefined ? data.risk_score : "N/A";
 
-    // Badge
+    // Confidence score (Task 3)
+    document.getElementById("confidenceScore").innerText =
+        data.confidence_score !== undefined ? data.confidence_score : "N/A";
+
+    // Risk badge
     const badge = document.getElementById("riskBadge");
-    badge.innerText = data.risk_category;
-    badge.className = "badge " + data.risk_category.toLowerCase();
+    badge.innerText = data.risk_category || "UNKNOWN";
+    badge.className = "badge " + (data.risk_category ? data.risk_category.toLowerCase() : "");
 
-    // Reasons
+    // Trigger reasons
     const list = document.getElementById("reasonsList");
     list.innerHTML = "";
 
-    if (data.trigger_reasons.length === 0) {
+    if (!data.trigger_reasons || data.trigger_reasons.length === 0) {
         const li = document.createElement("li");
         li.innerText = "No risk indicators detected";
         list.appendChild(li);
