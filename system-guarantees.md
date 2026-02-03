@@ -67,3 +67,20 @@ The system does NOT guarantee:
 - Accurate intent detection under adversarial phrasing
 - Robustness against semantic obfuscation
 - Correct interpretation of ambiguous language
+
+
+## Learning Guarantees
+
+The system guarantees:
+- Deterministic policy updates
+- Bounded learning under noisy feedback
+- No retroactive mutation of history
+- Explainable policy evolution
+
+## Red Lines (Non-Guarantees)
+
+The system does NOT guarantee:
+- Convergence to optimal policy
+- Immunity to adversarial feedback
+- Semantic correctness of feedback
+- Autonomous decision enforcement
