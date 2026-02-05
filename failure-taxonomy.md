@@ -1,4 +1,4 @@
-# Failure Taxonomy – Text Risk Scoring Service
+# Failure Taxonomy – Text Risk Scoring Service (FINAL)
 
 This document enumerates all known and anticipated failure modes in the
 Text Risk Scoring Service and defines how each is handled in a
@@ -7,6 +7,14 @@ deterministic, safe, and contract-compliant manner.
 The goal of this taxonomy is to ensure that the service never crashes,
 never produces undefined behavior, and always returns a structured,
 predictable response under all conditions.
+
+## Failure Classification System
+
+All failures are classified into three categories:
+
+- **INPUT_FAILURE**: Invalid, malformed, or boundary-violating input
+- **PROCESSING_FAILURE**: Internal logic or computation errors
+- **SCORING_FAILURE**: Score calculation or classification errors
 
 ---
 
@@ -21,6 +29,8 @@ predictable response under all conditions.
 ---
 
 ## F-01: Empty Input
+
+**Classification:** INPUT_FAILURE
 
 **Cause:**  
 The input text is an empty string or contains only whitespace.
@@ -48,6 +58,8 @@ invalid but common user input.
 
 ## F-02: Invalid Input Type
 
+**Classification:** INPUT_FAILURE
+
 **Cause:**  
 The input is not a string (e.g., null, number, object, array).
 
@@ -73,6 +85,8 @@ unexpected input types.
 
 ## F-03: Excessively Long Input
 
+**Classification:** INPUT_FAILURE
+
 **Cause:**  
 Input text exceeds the maximum allowed length.
 
@@ -95,6 +109,8 @@ Ensures bounded resource usage while preserving deterministic behavior.
 ---
 
 ## F-04: Keyword Saturation (Score Explosion)
+
+**Classification:** SCORING_FAILURE
 
 **Cause:**  
 A large number of risk keywords appear in the input, especially within a
@@ -119,6 +135,8 @@ Prevents runaway scoring and preserves meaningful category thresholds.
 
 ## F-05: Substring False Positives
 
+**Classification:** PROCESSING_FAILURE
+
 **Cause:**  
 Naive substring matching causes false positives  
 (e.g., "die" matching inside "studies").
@@ -141,6 +159,8 @@ Preserves semantic integrity of keyword detection and improves reliability.
 
 ## F-06: Score Overflow or Drift
 
+**Classification:** SCORING_FAILURE
+
 **Cause:**  
 Accumulated scores exceed the intended numeric range due to repeated
 detections across categories.
@@ -162,6 +182,8 @@ Maintains stable and interpretable scoring semantics.
 ---
 
 ## F-07: Unexpected Runtime Exception
+
+**Classification:** PROCESSING_FAILURE
 
 **Cause:**  
 Unexpected errors during processing (e.g., regex failure, internal bug).
@@ -187,6 +209,8 @@ Guarantees system availability and prevents crashes under all conditions.
 
 ## F-08: Determinism Violation
 
+**Classification:** PROCESSING_FAILURE
+
 **Cause:**  
 Non-deterministic logic such as randomness, time-based decisions, or
 unordered processing.
@@ -204,6 +228,54 @@ Same input producing different outputs across executions.
 
 **Why This Is Safe:**  
 Ensures reproducibility, testability, and demo reliability.
+
+---
+
+## F-09: Confidence Score Calculation Failure
+
+**Classification:** SCORING_FAILURE
+
+**Cause:**  
+Errors in confidence score calculation logic or boundary conditions.
+
+**Risk:**  
+Invalid confidence values outside [0.0, 1.0] range.
+
+**Handling Strategy:**  
+- Clamp confidence to valid range [0.0, 1.0]
+- Use deterministic confidence adjustment rules
+- Default to 1.0 for edge cases
+
+**Response Behavior:**  
+- confidence_score always ∈ [0.0, 1.0]
+- Consistent confidence calculation for identical inputs
+
+**Why This Is Safe:**  
+Ensures confidence scores remain meaningful and bounded.
+
+---
+
+## F-10: Regex Pattern Compilation Failure
+
+**Classification:** PROCESSING_FAILURE
+
+**Cause:**  
+Invalid regex patterns or regex engine errors.
+
+**Risk:**  
+Keyword detection failure or runtime exceptions.
+
+**Handling Strategy:**  
+- Use pre-validated, escaped regex patterns
+- Fallback to simple string matching if regex fails
+- Log pattern failures for debugging
+
+**Response Behavior:**  
+- Graceful degradation to basic matching
+- No service interruption
+
+**Why This Is Safe:**  
+Provides fallback mechanism while maintaining service availability.
 
 ---
 
