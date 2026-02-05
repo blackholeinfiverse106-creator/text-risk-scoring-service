@@ -1,5 +1,7 @@
 import re
 import logging
+import uuid
+import time
 from typing import Dict, Any
 
 # =========================
@@ -131,8 +133,11 @@ RISK_KEYWORDS = {
 # =========================
 # Error Response Helper
 # =========================
-def error_response(code: str, message: str) -> Dict[str, Any]:
-    logger.error("Error response generated | code=%s | message=%s", code, message)
+def error_response(code: str, message: str, correlation_id: str = None) -> Dict[str, Any]:
+    if correlation_id:
+        logger.error("Error response generated | correlation_id=%s | code=%s | message=%s", correlation_id, code, message)
+    else:
+        logger.error("Error response generated | code=%s | message=%s", code, message)
     return {
         "risk_score": 0.0,
         "confidence_score": 0.0,
@@ -150,14 +155,20 @@ def error_response(code: str, message: str) -> Dict[str, Any]:
 # Core Analysis Function
 # =========================
 def analyze_text(text: str) -> Dict[str, Any]:
+    # Generate correlation ID for request tracing
+    correlation_id = str(uuid.uuid4())[:8]
+    start_time = time.time()
+    
+    logger.info("Request started | correlation_id=%s", correlation_id)
+    
     try:
         # =========================
         # F-02: INVALID TYPE
         # =========================
         if not isinstance(text, str):
-            return error_response("INVALID_TYPE", "Input must be a string")
+            return error_response("INVALID_TYPE", "Input must be a string", correlation_id)
 
-        logger.info("Received text for analysis (raw_length=%d)", len(text))
+        logger.info("Received text for analysis | correlation_id=%s | raw_length=%d", correlation_id, len(text))
 
         # Normalize input
         text = text.strip().lower()
@@ -166,7 +177,7 @@ def analyze_text(text: str) -> Dict[str, Any]:
         # F-01: EMPTY INPUT
         # =========================
         if not text:
-            return error_response("EMPTY_INPUT", "Text is empty")
+            return error_response("EMPTY_INPUT", "Text is empty", correlation_id)
 
         # =========================
         # F-03: EXCESSIVE LENGTH
@@ -174,8 +185,8 @@ def analyze_text(text: str) -> Dict[str, Any]:
         truncated = False
         if len(text) > MAX_TEXT_LENGTH:
             logger.warning(
-                "Input truncated | original_length=%d | max_length=%d",
-                len(text), MAX_TEXT_LENGTH
+                "Input truncated | correlation_id=%s | original_length=%d | max_length=%d",
+                correlation_id, len(text), MAX_TEXT_LENGTH
             )
             text = text[:MAX_TEXT_LENGTH]
             truncated = True
@@ -196,8 +207,8 @@ def analyze_text(text: str) -> Dict[str, Any]:
                 pattern = r"\b" + re.escape(keyword) + r"\b"
                 if re.search(pattern, text):
                     logger.info(
-                        "Keyword detected | category=%s | keyword=%s",
-                        category, keyword
+                        "Keyword detected | correlation_id=%s | category=%s | keyword=%s",
+                        correlation_id, category, keyword
                     )
                     category_score += KEYWORD_WEIGHT
                     matched_keywords.append(keyword)
@@ -209,8 +220,8 @@ def analyze_text(text: str) -> Dict[str, Any]:
             # =========================
             if category_score > MAX_CATEGORY_SCORE:
                 logger.warning(
-                    "Category score capped | category=%s | raw_score=%.2f | cap=%.2f",
-                    category, category_score, MAX_CATEGORY_SCORE
+                    "Category score capped | correlation_id=%s | category=%s | raw_score=%.2f | cap=%.2f",
+                    correlation_id, category, category_score, MAX_CATEGORY_SCORE
                 )
                 category_score = MAX_CATEGORY_SCORE
 
@@ -221,8 +232,8 @@ def analyze_text(text: str) -> Dict[str, Any]:
         # =========================
         if total_score > 1.0:
             logger.warning(
-                "Total score clamped | raw_score=%.2f | cap=1.0",
-                total_score
+                "Total score clamped | correlation_id=%s | raw_score=%.2f | cap=1.0",
+                correlation_id, total_score
             )
             total_score = 1.0
 
@@ -255,9 +266,10 @@ def analyze_text(text: str) -> Dict[str, Any]:
 
         confidence = max(0.0, min(confidence, 1.0))
 
+        processing_time = time.time() - start_time
         logger.info(
-            "Final decision | score=%.2f | confidence=%.2f | category=%s",
-            total_score, confidence, risk_category
+            "Final decision | correlation_id=%s | score=%.2f | confidence=%.2f | category=%s | processing_time=%.3fms",
+            correlation_id, total_score, confidence, risk_category, processing_time * 1000
         )
 
         if truncated:
@@ -277,12 +289,14 @@ def analyze_text(text: str) -> Dict[str, Any]:
     # =========================
     except Exception:
         logger.error(
-            "Unexpected runtime error during text analysis",
+            "Unexpected runtime error during text analysis | correlation_id=%s",
+            correlation_id,
             exc_info=True
         )
         return error_response(
             "INTERNAL_ERROR",
-            "Unexpected processing error"
+            "Unexpected processing error",
+            correlation_id
         )
 
 #     adversarial_flags = detect_adversarial_patterns(text)
