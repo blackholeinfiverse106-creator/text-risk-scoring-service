@@ -690,7 +690,7 @@ def detect_adversarial_patterns(text: str) -> list[str]:
 
 #         if score < 0.3:
 #             risk = "LOW"
-#         elif score < 0.7:
+        # elif score < 0.7:
 #             risk = "MEDIUM"
 #         else:
 #             risk = "HIGH"

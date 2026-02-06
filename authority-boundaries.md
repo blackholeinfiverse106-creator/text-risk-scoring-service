@@ -6,6 +6,35 @@ This document establishes **explicit and non-negotiable boundaries** between ris
 
 **The Text Risk Scoring Service is a SIGNAL GENERATOR, not a DECISION MAKER.**
 
+## Formal Definitions
+
+To ensure zero ambiguity, we define the following terms:
+
+### 1. Risk Signal (THIS SYSTEM'S OUTPUT)
+*   **Definition:** A deterministic measurement of content against specific risk definitions.
+*   **Nature:** Descriptive, objective, quantifiable.
+*   **Example:** "Contains keyword 'kill' (match: threat_list_v1), Risk Score: 0.95".
+*   **Authority:** **NONE**. It is data, not a directive.
+
+### 2. Recommendation (THIS SYSTEM'S OUTPUT)
+*   **Definition:** A suggested classification based on the Risk Signal.
+*   **Nature:** Heuristic, advisory.
+*   **Example:** "Category: HIGH_RISK", "Suggestion: REVIEW".
+*   **Authority:** **NONE**. It is an opinion, not a command.
+
+### 3. Decision Request (INPUT)
+*   **Definition:** The act of an external system submitting content to this service for assessment.
+*   **Nature:** Inquiry.
+*   **Implication:** The requester is asking "What does the content contain?", NOT "What should I do?".
+
+### 4. Execution Authorization (NEVER THIS SYSTEM'S OUTPUT)
+*   **Definition:** A specific, cryptographically or policy-signed token that permits a state change (e.g., Delete, Ban, Report).
+*   **Nature:** Imperative, performative.
+*   **Example:** "ACTION: DELETE_POST, AUTH_BY: POLICY_ENGINE_V2".
+*   **Status:** **STRICTLY FORBIDDEN** in this system's output.
+
+---
+
 ## What This System IS
 
 ### ✅ **Risk Signal Provider**
@@ -24,7 +53,6 @@ This document establishes **explicit and non-negotiable boundaries** between ris
 - Guarantees predictable behavior for demonstrations
 - Provides stable output for evaluation scenarios
 - Enables safe integration testing
-- Supports proof-of-concept implementations
 
 ## What This System IS NOT
 
@@ -37,13 +65,11 @@ This document establishes **explicit and non-negotiable boundaries** between ris
 ### ❌ **Semantic Understanding Engine**
 - **CANNOT** understand context or intent
 - **CANNOT** detect sarcasm or irony
-- **CANNOT** interpret cultural nuances
 - **CANNOT** perform linguistic analysis
 
 ### ❌ **Legal or Medical Diagnostic Tool**
 - **NOT** suitable for legal decision-making
 - **NOT** appropriate for medical diagnosis
-- **NOT** designed for psychological assessment
 - **NOT** intended for regulatory compliance
 
 ## Decision Authority Boundaries

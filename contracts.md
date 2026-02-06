@@ -1,10 +1,10 @@
-# Contracts - Text Risk Scoring Service (SEALED)
+# Contracts - Text Risk Scoring Service (SAFETY ENFORCED)
 
-**CONTRACT VERSION: 1.0.0 - IMMUTABLE**  
-**SEALED DATE: 2024**  
-**MODIFICATION POLICY: FORBIDDEN**
+**CONTRACT VERSION: 2.0.0 - SAFETY LAYER INTEGRATED**  
+**PREVIOUS VERSION: 1.0.0 (Obsolete)**  
+**STATUS: ACTIVE**
 
-This document defines the **immutable and final** API contracts for the Text Risk Scoring Service. These contracts are **SEALED** and cannot be modified without breaking compatibility.
+This document defines the **immutable and final** API contracts for the Text Risk Scoring Service. These contracts includes key **Safety & Non-Authority** fields required for the Enforcement-Safe Decision Interface.
 
 ## Contract Enforcement Policy
 
@@ -44,16 +44,21 @@ POST /analyze
 3. **Field Enforcement**: Only "text" field allowed
 4. **Encoding Enforcement**: Valid UTF-8 sequences only
 
-## Output Contract (SEALED)
+## Output Contract (SAFETY ENHANCED)
 
 ### Response Schema (IMMUTABLE)
 ```json
 {
   "risk_score": 0.0,
   "confidence_score": 0.0,
-  "risk_category": "LOW|MEDIUM|HIGH",
+  "risk_severity": "LOW|MEDIUM|HIGH",
   "trigger_reasons": ["string"],
   "processed_length": 0,
+  "safety_metadata": {
+    "is_decision": false,
+    "authority": "NONE",
+    "actionable": false
+  },
   "errors": null | {
     "error_code": "string",
     "message": "string"
@@ -64,41 +69,49 @@ POST /analyze
 ### Required Fields (ALL MANDATORY)
 - **risk_score** (number) - Always present
 - **confidence_score** (number) - Always present  
-- **risk_category** (string) - Always present
+- **risk_severity** (string) - Always present (Renamed from risk_category for semantic clarity)
 - **trigger_reasons** (array) - Always present
 - **processed_length** (number) - Always present
+- **safety_metadata** (object) - MANDATORY - Explicit authority denial
 - **errors** (object|null) - Always present
 
 ### Forbidden Fields
 - No additional fields allowed
 - No field removal permitted
-- No field renaming allowed
 
 ### Output Limits (ABSOLUTE)
 - **risk_score**: 0.0 ≤ value ≤ 1.0 (2 decimal places)
 - **confidence_score**: 0.0 ≤ value ≤ 1.0 (2 decimal places)
-- **risk_category**: Exactly one of ["LOW", "MEDIUM", "HIGH"]
+- **risk_severity**: Exactly one of ["LOW", "MEDIUM", "HIGH"]
 - **trigger_reasons**: Array of strings, 0-100 elements max
 - **processed_length**: 0 ≤ value ≤ 5000
+- **safety_metadata**:
+    - **is_decision**: ALWAYS `false`
+    - **authority**: ALWAYS `"NONE"`
+    - **actionable**: ALWAYS `false`
 - **errors**: null OR {error_code: string, message: string}
 
 ### Output Validation Rules
 1. **Type Enforcement**: All fields must match exact types
 2. **Range Enforcement**: Numeric values within bounds
-3. **Enum Enforcement**: risk_category must be valid enum
-4. **Array Enforcement**: trigger_reasons must be string array
-5. **Error Enforcement**: errors must be null or valid error object
+3. **Enum Enforcement**: risk_severity must be valid enum
+4. **Safety Enforcement**: `safety_metadata` values MUST match constants associated with non-authority.
 
-## Error Contract (SEALED)
+## Error Contract (Sealed)
 
 ### Error Response Structure (IMMUTABLE)
 ```json
 {
   "risk_score": 0.0,
   "confidence_score": 0.0,
-  "risk_category": "LOW",
+  "risk_severity": "LOW",
   "trigger_reasons": [],
   "processed_length": 0,
+  "safety_metadata": {
+    "is_decision": false,
+    "authority": "NONE",
+    "actionable": false
+  },
   "errors": {
     "error_code": "ERROR_CODE",
     "message": "Human readable message"
@@ -146,6 +159,7 @@ POST /analyze
 - **Deterministic**: Same input always produces same output
 - **Bounded**: All outputs are within defined ranges
 - **Explainable**: All decisions include reasoning
+- **Non-Authoritative**: System explicitly disclaims decision power in every response
 
 ## Contract Violations
 
@@ -174,7 +188,7 @@ POST /analyze
 
 ### Backward Compatibility
 - **Input contract**: Will never change
-- **Output contract**: Will never change
+- **Output contract**: Version 2.0 introduces `safety_metadata` and renames `risk_category` to `risk_severity`.
 - **Error codes**: Will never change
 - **Field types**: Will never change
 
