@@ -144,6 +144,11 @@ def error_response(code: str, message: str, correlation_id: str = None) -> Dict[
         "risk_category": "LOW",
         "trigger_reasons": [],
         "processed_length": 0,
+        "safety_metadata": {
+            "is_decision": False,
+            "authority": "NONE",
+            "actionable": False
+        },
         "errors": {
             "error_code": code,
             "message": message
@@ -281,6 +286,11 @@ def analyze_text(text: str) -> Dict[str, Any]:
             "risk_category": risk_category,
             "trigger_reasons": reasons,
             "processed_length": len(text),
+            "safety_metadata": {
+                "is_decision": False,
+                "authority": "NONE",
+                "actionable": False
+            },
             "errors": None
         }
 

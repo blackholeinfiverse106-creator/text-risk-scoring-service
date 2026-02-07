@@ -62,6 +62,11 @@ class TestOutputContractEnforcement:
             "risk_category": "MEDIUM",
             "trigger_reasons": ["test reason"],
             "processed_length": 10,
+            "safety_metadata": {
+                "is_decision": False,
+                "authority": "NONE",
+                "actionable": False
+            },
             "errors": None
         }
         validate_output_contract(valid_output)  # Should not raise
@@ -86,6 +91,11 @@ class TestOutputContractEnforcement:
             "risk_category": "MEDIUM",
             "trigger_reasons": [],
             "processed_length": 10,
+            "safety_metadata": {
+                "is_decision": False,
+                "authority": "NONE",
+                "actionable": False
+            },
             "errors": None,
             "extra_field": "forbidden"
         }
@@ -102,6 +112,11 @@ class TestOutputContractEnforcement:
             "risk_category": "MEDIUM",
             "trigger_reasons": [],
             "processed_length": 10,
+            "safety_metadata": {
+                "is_decision": False,
+                "authority": "NONE",
+                "actionable": False
+            },
             "errors": None
         }
         
@@ -131,6 +146,11 @@ class TestOutputContractEnforcement:
             "risk_category": "MEDIUM",
             "trigger_reasons": [],
             "processed_length": 10,
+            "safety_metadata": {
+                "is_decision": False,
+                "authority": "NONE",
+                "actionable": False
+            },
             "errors": None
         }
         
@@ -160,6 +180,11 @@ class TestOutputContractEnforcement:
             "risk_category": "MEDIUM",
             "trigger_reasons": [],
             "processed_length": 10,
+            "safety_metadata": {
+                "is_decision": False,
+                "authority": "NONE",
+                "actionable": False
+            },
             "errors": None
         }
         
@@ -185,6 +210,11 @@ class TestOutputContractEnforcement:
             "risk_category": "MEDIUM",
             "trigger_reasons": [],
             "processed_length": 10,
+            "safety_metadata": {
+                "is_decision": False,
+                "authority": "NONE",
+                "actionable": False
+            },
             "errors": None
         }
         

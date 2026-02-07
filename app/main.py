@@ -32,6 +32,11 @@ def analyze(payload: InputSchema):
             "risk_category": "LOW",
             "trigger_reasons": [],
             "processed_length": 0,
+            "safety_metadata": {
+                "is_decision": False,
+                "authority": "NONE",
+                "actionable": False
+            },
             "errors": {
                 "error_code": e.code,
                 "message": e.message
@@ -45,6 +50,11 @@ def analyze(payload: InputSchema):
             "risk_category": "LOW",
             "trigger_reasons": [],
             "processed_length": 0,
+            "safety_metadata": {
+                "is_decision": False,
+                "authority": "NONE",
+                "actionable": False
+            },
             "errors": {
                 "error_code": "INTERNAL_ERROR",
                 "message": "Unexpected system error"

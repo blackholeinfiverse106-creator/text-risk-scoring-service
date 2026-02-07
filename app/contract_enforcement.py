@@ -68,7 +68,7 @@ def validate_output_contract(response: Dict[str, Any]) -> None:
     """
     required_fields = {
         "risk_score", "confidence_score", "risk_category", 
-        "trigger_reasons", "processed_length", "errors"
+        "trigger_reasons", "processed_length", "safety_metadata", "errors"
     }
     
     # Check all required fields present
@@ -120,6 +120,24 @@ def validate_output_contract(response: Dict[str, Any]) -> None:
     if not (0 <= processed_length <= MAX_TEXT_LENGTH):
         raise ContractViolation("INVALID_PROCESSED_LENGTH_RANGE", f"processed_length must be 0-{MAX_TEXT_LENGTH}")
     
+    # Validate safety_metadata (CRITICAL FOR AUTHORITY BOUNDARIES)
+    safety_metadata = response["safety_metadata"]
+    if not isinstance(safety_metadata, dict):
+        raise ContractViolation("INVALID_SAFETY_METADATA_TYPE", "safety_metadata must be object")
+    
+    required_safety_fields = {"is_decision", "authority", "actionable"}
+    actual_safety_fields = set(safety_metadata.keys())
+    if actual_safety_fields != required_safety_fields:
+        raise ContractViolation("INVALID_SAFETY_METADATA_STRUCTURE", f"safety_metadata must have exactly {required_safety_fields}")
+    
+    # Enforce non-authority constants
+    if safety_metadata["is_decision"] is not False:
+        raise ContractViolation("INVALID_IS_DECISION", "is_decision must be False")
+    if safety_metadata["authority"] != "NONE":
+        raise ContractViolation("INVALID_AUTHORITY", "authority must be 'NONE'")
+    if safety_metadata["actionable"] is not False:
+        raise ContractViolation("INVALID_ACTIONABLE", "actionable must be False")
+    
     # Validate errors
     errors = response["errors"]
     if errors is not None:
@@ -167,6 +185,11 @@ def enforce_contracts(func):
                 "risk_category": "LOW",
                 "trigger_reasons": [],
                 "processed_length": 0,
+                "safety_metadata": {
+                    "is_decision": False,
+                    "authority": "NONE",
+                    "actionable": False
+                },
                 "errors": {
                     "error_code": e.code,
                     "message": e.message
