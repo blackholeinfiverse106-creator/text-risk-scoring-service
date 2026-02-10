@@ -1,31 +1,47 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from app.schemas import InputSchema, OutputSchema
 from app.engine import analyze_text
 from app.contract_enforcement import validate_input_contract, validate_output_contract, ContractViolation
 import json
+import logging
+import uuid
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Text Risk Scoring Service")
 
+# CORS middleware - must be added before routes
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.post("/analyze", response_model=OutputSchema)
 def analyze(payload: InputSchema):
+    request_id = str(uuid.uuid4())[:8]
+    logger.info(f"[{request_id}] Request received | reason=new_analysis_request")
+    
     try:
-        # Convert Pydantic model to dict for contract validation
         request_data = payload.dict()
+        logger.debug(f"[{request_id}] Input validation starting | reason=contract_enforcement")
         
-        # Validate input contract
         text = validate_input_contract(request_data)
+        logger.info(f"[{request_id}] Input validated | reason=contract_passed | length={len(text)}")
         
-        # Perform analysis
         response = analyze_text(text)
+        logger.info(f"[{request_id}] Analysis complete | reason=engine_success | risk={response['risk_category']}")
         
-        # Validate output contract
         validate_output_contract(response)
+        logger.debug(f"[{request_id}] Output validated | reason=contract_enforcement_passed")
         
         return response
         
     except ContractViolation as e:
-        # Return contract violation as structured response
+        logger.warning(f"[{request_id}] Contract violation | reason=input_validation_failed | code={e.code} | why={e.message}")
         return {
             "risk_score": 0.0,
             "confidence_score": 0.0,
@@ -43,7 +59,7 @@ def analyze(payload: InputSchema):
             }
         }
     except Exception as e:
-        # Handle unexpected errors
+        logger.error(f"[{request_id}] Unexpected error | reason=unhandled_exception | why={str(e)}", exc_info=True)
         return {
             "risk_score": 0.0,
             "confidence_score": 0.0,
@@ -60,13 +76,3 @@ def analyze(payload: InputSchema):
                 "message": "Unexpected system error"
             }
         }
-
-
-from fastapi.middleware.cors import CORSMiddleware
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)

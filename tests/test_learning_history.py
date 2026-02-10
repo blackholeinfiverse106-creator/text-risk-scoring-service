@@ -1,13 +1,13 @@
 from feedback.learning_history import LearningHistory
 from feedback.feedback_event import FeedbackEvent
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def test_learning_history_append_only():
     history = LearningHistory()
 
     event1 = FeedbackEvent(
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         input_text_id="1",
         predicted_category="LOW",
         actual_outcome="SAFE",
@@ -15,7 +15,7 @@ def test_learning_history_append_only():
     )
 
     event2 = FeedbackEvent(
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
         input_text_id="2",
         predicted_category="HIGH",
         actual_outcome="RISK_CONFIRMED",
