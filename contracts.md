@@ -1,10 +1,16 @@
-# Contracts - Text Risk Scoring Service (SAFETY ENFORCED)
+# Contracts - Text Risk Scoring Service (FINAL & SEALED)
 
-**CONTRACT VERSION: 2.0.0 - SAFETY LAYER INTEGRATED**  
+**CONTRACT VERSION: 2.0.0 - FINAL**  
 **PREVIOUS VERSION: 1.0.0 (Obsolete)**  
-**STATUS: ACTIVE**
+**STATUS: SEALED - NO FURTHER CHANGES PERMITTED**  
+**SEALED DATE**: Day 1 - Decision Semantics & Authority Discipline
 
 This document defines the **immutable and final** API contracts for the Text Risk Scoring Service. These contracts includes key **Safety & Non-Authority** fields required for the Enforcement-Safe Decision Interface.
+
+**RELATED DOCUMENTS**:
+- decision-semantics.md - Defines exact meaning of all outputs
+- authority-boundaries.md - Defines system authority limits
+- forbidden-usage.md - Defines prohibited use cases
 
 ## Contract Enforcement Policy
 
@@ -217,3 +223,125 @@ POST /analyze
 **These contracts are SEALED and IMMUTABLE. Any modification requires a new major version and constitutes a breaking change. The system MUST enforce these contracts absolutely with no exceptions.**
 
 **Contract enforcement is mandatory and non-negotiable.**
+
+---
+
+## Day 1 Completion - Decision Semantics & Authority Discipline
+
+**Sealed on**: Day 1  
+**Purpose**: Freeze and formalize system behavior and authority boundaries
+
+### What This Service Does (FINAL)
+- Generates risk signals from text using deterministic keyword matching
+- Assigns numeric risk scores (0.0 - 1.0) based on keyword weights
+- Categorizes risk level (LOW/MEDIUM/HIGH) using fixed thresholds
+- Provides explicit trigger reasons for explainability
+- Returns confidence scores for signal quality assessment
+- Operates deterministically (same input → same output, always)
+
+### What This Service Does NOT Do (FINAL)
+- ❌ Make decisions or provide decision authority
+- ❌ Understand context, intent, or semantic meaning
+- ❌ Learn, adapt, or change behavior over time
+- ❌ Guarantee accuracy (false positives/negatives expected)
+- ❌ Provide legal, medical, or regulatory compliance
+- ❌ Predict future behavior or create risk profiles
+
+### Strict Scoring Semantics (FINAL)
+
+**Risk Score (0.0 - 1.0)**:
+- 0.0 - 0.29: LOW (minimal risk indicators)
+- 0.30 - 0.69: MEDIUM (moderate risk indicators)
+- 0.70 - 1.0: HIGH (strong risk indicators)
+- Calculation: Σ(keyword_matches × 0.2) per category, capped at 0.6/category, 1.0 total
+
+**Confidence Score (0.0 - 1.0)**:
+- System's self-assessment of signal quality
+- NOT a guarantee of accuracy
+- Factors: keyword count, category diversity, pattern strength
+
+**Risk Category**:
+- Discrete classification based on score thresholds
+- Deterministic: same score → same category
+- Thresholds are immutable
+
+**Trigger Reasons**:
+- Explicit list of detected keywords and categories
+- Provides explainability and audit trail
+- Empty array = no keywords detected
+
+**Safety Metadata** (IMMUTABLE):
+- is_decision: Always false
+- authority: Always "NONE"
+- actionable: Always false
+- Purpose: Prevent misinterpretation as executable command
+
+### Scores MUST NEVER Be Used For (FINAL)
+
+❌ **Prohibited Use Cases**:
+1. Sole basis for automated decisions (content deletion, account suspension)
+2. Legal or regulatory compliance (evidence, reporting, certification)
+3. Medical or psychological assessment (suicide risk, mental health screening)
+4. Employment decisions (hiring, firing, performance evaluation)
+5. Financial decisions (credit scoring, fraud detection as sole input)
+6. Critical safety systems (life-safety, emergency response)
+7. Educational assessment (academic integrity as sole evidence)
+8. Content moderation without human review
+9. Surveillance or monitoring without consent
+10. Predictive profiling (future behavior, recidivism)
+
+✅ **Permitted Use Cases**:
+1. Human-in-the-loop workflows (flag for review, prioritize queues)
+2. Multi-signal systems (one input among many)
+3. Demo and evaluation (system testing, integration validation)
+4. Pre-screening (initial filtering, volume reduction)
+5. Research and development (with ethical approval)
+
+### Explicit Misuse Guards (FINAL)
+
+**Technical Safeguards**:
+- safety_metadata field in every response
+- Explicit authority denial ("NONE")
+- Non-decision declaration (is_decision: false)
+- Non-actionable flag (actionable: false)
+
+**Documentation Safeguards**:
+- decision-semantics.md: Defines exact output meaning
+- authority-boundaries.md: Defines system authority limits
+- forbidden-usage.md: Lists prohibited use cases
+- system-guarantees.md: Defines what is/isn't guaranteed
+
+**Enforcement Mechanisms**:
+- Contract validation on every response
+- Structured error handling (fail-closed)
+- Deterministic behavior (no randomness)
+- Bounded outputs (all values within defined ranges)
+
+### Integration Requirements (FINAL)
+
+**Downstream systems MUST**:
+1. Check safety_metadata and respect authority limits
+2. Implement human review for consequential decisions
+3. Combine with other signals (not sole decision factor)
+4. Provide appeals and correction mechanisms
+5. Maintain audit trails for decisions
+6. Comply with applicable laws and regulations
+7. Handle false positives/negatives appropriately
+
+**Downstream systems MUST NOT**:
+1. Treat outputs as executable commands
+2. Use as sole basis for automated actions
+3. Assume semantic understanding or intent detection
+4. Rely on for legal, medical, or regulatory compliance
+5. Use for prohibited use cases (see forbidden-usage.md)
+
+---
+
+## Contract Seal - Day 1 Complete
+
+**Decision Semantics**: SEALED ✓  
+**Authority Boundaries**: SEALED ✓  
+**Forbidden Usage**: SEALED ✓  
+**Contracts**: SEALED ✓
+
+**No further modifications permitted without major version increment.**
