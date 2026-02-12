@@ -119,6 +119,9 @@ POST /analyze
 - `INVALID_TYPE` - Input is not a string
 - `EXCESSIVE_LENGTH` - Input exceeds 5000 chars (handled via truncation)
 - `INTERNAL_ERROR` - Unexpected system error
+- `INVALID_CONTEXT` - Context field is not a valid object
+- `FORBIDDEN_ROLE` - Caller identity uses a prohibited enforcement role
+- `DECISION_INJECTION` - Input contains forbidden decision-making fields
 
 ---
 

@@ -1,166 +1,90 @@
-# Authority Boundaries – Text Risk Scoring Service
+# Authority Boundaries - Text Risk Scoring Service
 
-This document establishes **explicit and non-negotiable boundaries** between risk signal generation and decision authority in the Text Risk Scoring Service.
-
-## Core Principle
-
-**The Text Risk Scoring Service is a SIGNAL GENERATOR, not a DECISION MAKER.**
-
-## Formal Definitions
-
-To ensure zero ambiguity, we define the following terms:
-
-### 1. Risk Signal (THIS SYSTEM'S OUTPUT)
-*   **Definition:** A deterministic measurement of content against specific risk definitions.
-*   **Nature:** Descriptive, objective, quantifiable.
-*   **Example:** "Contains keyword 'kill' (match: threat_list_v1), Risk Score: 0.95".
-*   **Authority:** **NONE**. It is data, not a directive.
-
-### 2. Recommendation (THIS SYSTEM'S OUTPUT)
-*   **Definition:** A suggested classification based on the Risk Signal.
-*   **Nature:** Heuristic, advisory.
-*   **Example:** "Category: HIGH_RISK", "Suggestion: REVIEW".
-*   **Authority:** **NONE**. It is an opinion, not a command.
-
-### 3. Decision Request (INPUT)
-*   **Definition:** The act of an external system submitting content to this service for assessment.
-*   **Nature:** Inquiry.
-*   **Implication:** The requester is asking "What does the content contain?", NOT "What should I do?".
-
-### 4. Execution Authorization (NEVER THIS SYSTEM'S OUTPUT)
-*   **Definition:** A specific, cryptographically or policy-signed token that permits a state change (e.g., Delete, Ban, Report).
-*   **Nature:** Imperative, performative.
-*   **Example:** "ACTION: DELETE_POST, AUTH_BY: POLICY_ENGINE_V2".
-*   **Status:** **STRICTLY FORBIDDEN** in this system's output.
+**Version**: 1.0.0  
+**Status**: SEALED  
+**Purpose**: Explicitly define what this system IS and what it IS NOT allowed to do.
 
 ---
 
-## What This System IS
+## 1. The Core Axiom
 
-### ✅ **Risk Signal Provider**
-- Generates deterministic risk scores (0.0 - 1.0)
-- Provides explainable keyword-based triggers
-- Offers structured risk categorization (LOW/MEDIUM/HIGH)
-- Delivers consistent, reproducible assessments
+> **"This system possesses ZERO execution authority. It provides SIGNALS, not DECISIONS."**
 
-### ✅ **Decision Support Tool**
-- Provides input for human decision-makers
-- Offers structured data for downstream systems
-- Enables rule-based filtering pipelines
-- Supports content moderation workflows
+Any integration that treats the output of this service as a final decision violates the system's design contract and assumes all liability for resulting errors.
 
-### ✅ **Demo-Safe Assessment Engine**
-- Guarantees predictable behavior for demonstrations
-- Provides stable output for evaluation scenarios
-- Enables safe integration testing
+---
 
-## What This System IS NOT
+## 2. The 5 Pillars of Non-Authority
 
-### ❌ **Autonomous Decision Authority**
-- **NEVER** makes final decisions about content
-- **NEVER** determines legal or policy compliance
-- **NEVER** replaces human judgment
-- **NEVER** provides authoritative risk assessment
+### Pillar I: No Decision Authority ❌
+**Definition**: The system cannot authorize, deny, ban, delete, or approve anything.
+**Constraint**: All outputs must be treated as *advisory input* to a separate decision-making layer (human or policy engine).
+**Mechanism**: Every response includes `safety_metadata.is_decision = False`.
 
-### ❌ **Semantic Understanding Engine**
-- **CANNOT** understand context or intent
-- **CANNOT** detect sarcasm or irony
-- **CANNOT** perform linguistic analysis
+### Pillar II: No Semantic Understanding ❌
+**Definition**: The system cannot understand intent, context, sarcasm, or nuance.
+**Constraint**: Matches are strictly keyword-based. "I will kill time" is indistinguishable from "I will kill you" to this engine.
+**Mechanism**: Documented limitation in `system-guarantees.md`.
 
-### ❌ **Legal or Medical Diagnostic Tool**
-- **NOT** suitable for legal decision-making
-- **NOT** appropriate for medical diagnosis
-- **NOT** intended for regulatory compliance
+### Pillar III: No Legal Standing ❌
+**Definition**: The system cannot determine legality or compliance.
+**Constraint**: Outputs must never be used as evidence of illegal activity or policy violation without human verification.
+**Mechanism**: Explicit prohibition in `forbidden-usage.md`.
 
-## Decision Authority Boundaries
+### Pillar IV: No Predictive Capability ❌
+**Definition**: The system cannot predict future behavior or assess risk of future harm.
+**Constraint**: Analysis is limited strictly to the *current text payload*.
+**Mechanism**: Stateless design prevents historical profiling.
 
-### **Human Authority Required For:**
-- Content removal or blocking decisions
-- Account suspension or termination
-- Legal action or reporting
-- Policy violation determinations
-- Appeals and dispute resolution
+### Pillar V: No Agency ❌
+**Definition**: The system cannot take action in the real world.
+**Constraint**: API is read-only. It has no side effects (no database writes, no external calls).
+**Mechanism**: Pure function architecture.
 
-### **System Authority Limited To:**
-- Keyword pattern detection
-- Numerical score generation
-- Category classification
-- Structured data output
-- Deterministic signal provision
+---
 
-## Integration Responsibilities
+## 3. Boundary Definitions
 
-### **Downstream System Responsibilities:**
-- Interpret risk signals appropriately
-- Apply business logic and policies
-- Make final decisions based on multiple inputs
-- Handle appeals and exceptions
-- Maintain audit trails for decisions
+### 3.1 The Execution Boundary
+The line where risk signals stop and decisions begin.
+- **INSIDE (Risk Service)**: Keyword detection, scoring, categorization.
+- **OUTSIDE (Enforcement System)**: Policy application, thresholds, ban/allow decisions.
 
-### **This System's Responsibilities:**
-- Provide accurate signal generation
-- Maintain deterministic behavior
-- Deliver structured, explainable output
-- Handle edge cases gracefully
-- Preserve system stability
+### 3.2 The Responsibility Boundary
+The line where system reliability ends and user liability begins.
+- **Service Responsibility**: Deterministic keyword matching.
+- **User Responsibility**: Interpretation of results and actions taken.
 
-## Liability and Accountability
+---
 
-### **This System Does NOT:**
-- Accept liability for downstream decisions
-- Guarantee accuracy of risk assessment
-- Provide legal or regulatory compliance
-- Replace professional judgment
-- Assume responsibility for false positives/negatives
+## 4. Prohibited Domains (Absolute Exclusion)
 
-### **Users Must:**
-- Validate system output against business requirements
-- Implement appropriate human oversight
-- Maintain decision audit trails
-- Handle appeals and corrections
-- Accept responsibility for final decisions
+Usage in these domains is **strictly forbidden** due to the inability of keyword matching to capture necessary complexity:
 
-## Usage Disclaimers
+| Domain | Why Prohibited | Impact of Failure |
+| :--- | :--- | :--- |
+| **Medical / Psychological** | Diagnosis requires clinical context | Misdiagnosis, missed crisis |
+| **Legal / Judicial** | Evidence requires chain of custody & intent | False conviction/acquittal |
+| **Employment / HR** | Hiring requires holistic evaluation | Discrimination, unfair dismissal |
+| **Credit / Financial** | Lending requires verified history | Financial exclusion |
+| **Critical Infrastructure** | Safety requires physical guarantees | Physical harm, catastrophe |
 
-### **Appropriate Use Cases:**
-- Content pre-filtering for human review
-- Risk signal aggregation in larger systems
-- Demo and evaluation environments
-- Development and testing scenarios
-- Educational and research purposes
+---
 
-### **Inappropriate Use Cases:**
-- Fully automated content moderation
-- Legal evidence or compliance checking
-- Medical or psychological screening
-- Financial fraud detection (as sole input)
-- Critical safety or security decisions
+## 5. Metadata Enforcement
 
-## Red Lines - Never Cross These Boundaries
+Every response MUST contain the following immutable metadata block to reinforce these boundaries:
 
-1. **Never use this system as the sole basis for consequential decisions**
-2. **Never deploy without human oversight mechanisms**
-3. **Never assume semantic understanding of content**
-4. **Never rely on this system for legal compliance**
-5. **Never use for decisions affecting individual rights without review**
+```json
+"safety_metadata": {
+  "is_decision": false,
+  "authority": "NONE",
+  "actionable": false
+}
+```
 
-## Integration Checklist
+**Downstream Requirement**: Consumers MUST verify this block. If `is_decision` is ever `true` (impossible by design), the system must HALT.
 
-Before deploying this system, ensure:
+---
 
-- [ ] Human review processes are in place
-- [ ] Decision audit trails are implemented
-- [ ] Appeals mechanisms are available
-- [ ] Business logic validation is performed
-- [ ] Appropriate disclaimers are provided to end users
-- [ ] System limitations are clearly communicated
-- [ ] Fallback procedures are defined
-- [ ] Regular accuracy validation is scheduled
-
-## Authority Statement
-
-**This system provides risk signals only. All decisions based on these signals remain the full responsibility of the integrating system and its operators.**
-
-**No warranty, guarantee, or assurance is provided regarding the accuracy, completeness, or appropriateness of risk assessments for any specific use case.**
-
-This document serves as the **definitive authority boundary specification** for the Text Risk Scoring Service.
+**Authority Boundaries: SEALED ✓**

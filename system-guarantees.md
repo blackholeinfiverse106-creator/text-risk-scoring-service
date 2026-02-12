@@ -115,6 +115,9 @@ This document explicitly defines what the system guarantees and what it intentio
 - Invalid type → Error (INVALID_TYPE)
 - Excessive length → Truncation + flag
 - Internal error → Error (INTERNAL_ERROR)
+- Invalid context → Error (INVALID_CONTEXT)
+- Forbidden role → Error (FORBIDDEN_ROLE)
+- Decision injection → Error (DECISION_INJECTION)
 
 **Verified by**:
 - enforcement-abuse-tests/test_fail_closed.py (7 tests)

@@ -11,7 +11,8 @@ MAX_TRIGGER_REASONS = 100
 VALID_RISK_CATEGORIES = {"LOW", "MEDIUM", "HIGH"}
 VALID_ERROR_CODES = {
     "INVALID_TYPE", "EMPTY_INPUT", "EXCESSIVE_LENGTH", 
-    "INVALID_ENCODING", "FORBIDDEN_FIELD", "MISSING_FIELD", "INTERNAL_ERROR"
+    "INVALID_ENCODING", "FORBIDDEN_FIELD", "MISSING_FIELD", "INTERNAL_ERROR",
+    "INVALID_CONTEXT", "FORBIDDEN_ROLE", "DECISION_INJECTION"
 }
 
 class ContractViolation(Exception):
@@ -32,7 +33,7 @@ def validate_input_contract(data: Any) -> str:
         raise ContractViolation("INVALID_REQUEST", "Request must be JSON object")
     
     # Check for forbidden fields
-    allowed_fields = {"text"}
+    allowed_fields = {"text", "context"}
     actual_fields = set(data.keys())
     forbidden_fields = actual_fields - allowed_fields
     if forbidden_fields:
@@ -47,7 +48,26 @@ def validate_input_contract(data: Any) -> str:
     # Type enforcement
     if not isinstance(text, str):
         raise ContractViolation("INVALID_TYPE", "Field 'text' must be a string")
-    
+        
+    # Context enforcement (Misuse Detection)
+    if "context" in data:
+        context = data["context"]
+        if not isinstance(context, dict):
+            raise ContractViolation("INVALID_CONTEXT", "Field 'context' must be a JSON object")
+            
+        # M-01: Reject Enforcement Roles
+        if "role" in context:
+            forbidden_roles = {"enforcement", "decision_maker", "judge", "execution", "admin"}
+            if context["role"].lower() in forbidden_roles:
+                raise ContractViolation("FORBIDDEN_ROLE", f"Role '{context['role']}' is strictly prohibited. This system cannot be used by enforcement roles.")
+        
+        # M-02: Reject Decision Injection
+        forbidden_context_fields = {"action", "decision", "execute", "perform_action", "override_risk"}
+        actual_context_fields = set(context.keys())
+        found_forbidden = actual_context_fields.intersection(forbidden_context_fields)
+        if found_forbidden:
+            raise ContractViolation("DECISION_INJECTION", f"Forbidden decision fields detected: {list(found_forbidden)}. System cannot execute actions.")
+
     # Length enforcement (before normalization)
     if len(text) > MAX_TEXT_LENGTH:
         # This is handled by truncation, not rejection
