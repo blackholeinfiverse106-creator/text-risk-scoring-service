@@ -160,13 +160,13 @@ def error_response(code: str, message: str, correlation_id: str = None) -> Dict[
 # Core Analysis Function
 # =========================
 def analyze_text(text: str) -> Dict[str, Any]:
-    # Generate correlation ID for request tracing
-    correlation_id = str(uuid.uuid4())[:8]
-    start_time = time.time()
-    
-    logger.info("Request started | correlation_id=%s", correlation_id)
-    
+    correlation_id = "UNKNOWN"
     try:
+        # Generate correlation ID for request tracing
+        correlation_id = str(uuid.uuid4())[:8]
+        start_time = time.time()
+        
+        logger.info("Request started | correlation_id=%s", correlation_id)
         # =========================
         # F-02: INVALID TYPE
         # =========================
@@ -205,7 +205,7 @@ def analyze_text(text: str) -> Dict[str, Any]:
         # =========================
         # CORE MATCHING LOGIC
         # =========================
-        for category, keywords in RISK_KEYWORDS.items():
+        for category, keywords in sorted(RISK_KEYWORDS.items()):
             category_score = 0.0
 
             for keyword in keywords:
@@ -245,12 +245,26 @@ def analyze_text(text: str) -> Dict[str, Any]:
         # =========================
         # RISK THRESHOLDS
         # =========================
+        # Explicit interval definitions covering the entire domain [0.0, 1.0]
         if total_score < 0.3:
             risk_category = "LOW"
-        elif total_score < 0.7:
+        elif 0.3 <= total_score < 0.7:
             risk_category = "MEDIUM"
         else:
+            # Implies total_score >= 0.7
             risk_category = "HIGH"
+
+        # =========================
+        # INVARIANT ENFORCEMENT (FAIL-SAFE)
+        # =========================
+        # F-02: Score/Category Mismatch Prevention
+        if total_score >= 0.7 and risk_category != "HIGH":
+             logger.error("Invariant violation detected: Score %.2f >= 0.7 but Category is %s. Correcting to HIGH.", total_score, risk_category)
+             risk_category = "HIGH"
+        
+        if total_score < 0.3 and risk_category == "HIGH":
+             logger.error("Invariant violation detected: Score %.2f < 0.3 but Category is HIGH. Correcting to LOW.", total_score)
+             risk_category = "LOW"
 
         # =========================
         # CONFIDENCE LOGIC (TASK 3 - DAY 2)

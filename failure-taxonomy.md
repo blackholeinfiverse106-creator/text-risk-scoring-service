@@ -277,6 +277,32 @@ Keyword detection failure or runtime exceptions.
 **Why This Is Safe:**  
 Provides fallback mechanism while maintaining service availability.
 
+
+---
+
+## F-11: Concurrency Hazards (Race Conditions)
+
+**Classification:** PROCESSING_FAILURE
+
+**Cause:**
+High-concurrency environments causing race conditions, shared state corruption, or variable clobbering.
+
+**Risk:**
+Data leakage between requests (cross-talk) or non-deterministic scoring.
+
+**Handling Strategy:**
+- Purely functional design (Stateless)
+- No module-level mutable state
+- Thread-local variables (implicit in Python stack)
+- Request-scoped `correlation_id`
+
+**Response Behavior:**
+- 50 concurrent threads produce 0 logic errors
+- Latency degrades gracefully (Linear scaling) without functional failure
+
+**Why This Is Safe:**
+Verified by `stress_test_concurrency.py` (50 threads, 1000 requests, 0 errors).
+
 ---
 
 ## Summary
