@@ -1,10 +1,11 @@
 # HANDOVER DOCUMENT
 ## Text Risk Scoring Service
 
-**Version**: 2.0.0 (FINAL)  
-**Status**: PRODUCTION READY  
-**Handover Date**: PART C Completion  
-**Test Coverage**: 97/97 tests passing ✓
+**Version**: 2.1.0 (REVALIDATED)  
+**Status**: ENFORCEMENT-READY ✓
+**Handover Date**: 2026-02-14 (Day 2 Final Audit)
+**Handover ID**: 1db0d0ac
+**Test Coverage**: 114/114 tests passing ✓
 
 ---
 
@@ -253,9 +254,15 @@ else: "HIGH"
 
 ### Alerts
 - Error rate > 1%
-- Response time > 100ms (P95)
+- Response time > 500ms (Aggressive timeout)
 - Service unavailable
 - Unusual score distribution
+- `invariant_correction` or `contract_violation` events in logs
+
+## Operational Guardrails
+- **Logs**: Monitor `event_type` in JSON logs for `invariant_correction` or `contract_violation`.
+- **Scaling**: The service is stateless; use horizontal scaling for high-throughput environments.
+- **Updates**: When adding keywords, ensure `sorted()` iteration is maintained in `engine.py`.
 
 ---
 
@@ -328,6 +335,9 @@ else: "HIGH"
 - Deterministic (no timing attacks)
 - Bounded processing (no DoS via complexity)
 - Rate limiting (recommended at API gateway)
+- **ReDoS Protection**: Pattern matching uses word boundary anchors (`\b`).
+- **Resource Exhaustion**: Strict truncation at 5000 characters.
+- **Agency Overreach**: Contract enforcement layer blocks executive fields.
 
 ---
 
