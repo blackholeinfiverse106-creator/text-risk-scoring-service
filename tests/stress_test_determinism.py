@@ -1,6 +1,12 @@
 import hashlib
 import json
 import pytest
+import sys
+import os
+
+# Allow running from anywhere
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
 from app.engine import analyze_text
 
 def get_semantic_hash(response):
