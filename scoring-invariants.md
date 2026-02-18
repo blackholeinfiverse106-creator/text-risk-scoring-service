@@ -1,49 +1,37 @@
-# Scoring Invariants & Mathematical Rules
+# Scoring Algebra & Invariants
 
-## 1. Core Invariants
-These properties must hold true for *every* execution of the scoring engine.
+## 1. Mathematical Model
+ The risk score $S$ for a given input text $T$ is defined as the bounded sum of weighted keyword matches:
 
-| Invariant ID | Description | Mathematical Expression |
-| :--- | :--- | :--- |
-| **INV-01** | **Bounded Score** | $0.0 \le S_{final} \le 1.0$ |
-| **INV-02** | **Bounded Confidence** | $0.0 \le C_{final} \le 1.0$ |
-| **INV-03** | **Monotonicity** | Adding a risk keyword *never* decreases the raw risk score (before clamping). $Score(T + k) \ge Score(T)$ |
-| **INV-04** | **Category Consistency** | If $S_{final} \ge 0.7$, then $Category \in \{HIGH\}$. If $0.3 \le S_{final} < 0.7$, then $Category \in \{MEDIUM\}$. If $S_{final} < 0.3$, then $Category \in \{LOW\}$. |
-| **INV-05** | **Determinism** | For any input $T$, $f(T)$ is constant across time and environments. |
+$$
+S(T) = \min\left(1.0, \sum_{c \in C} \min(MAX\_CAT\_SCORE, \sum_{k \in K_c} w \cdot I(k, T))\right)
+$$
 
-## 2. Evaluation Order
-To ensure determinism, rules must be evaluated in a strict, frozen order.
+Where:
+- $C$ is the set of all risk categories.
+- $K_c$ is the set of keywords for category $c$.
+- $w$ is the keyword weight (constant `0.2`).
+- $I(k, T)$ is the indicator function: $1$ if keyword $k$ is found in normalized $T$, else $0$.
+- $MAX\_CAT\_SCORE$ is the per-category cap (constant `0.6`).
 
-1.  **Input Normalization**: `strip()`, `lower()`.
-2.  **Length Check**: Truncate to `MAX_TEXT_LENGTH` (5000).
-3.  **Keyword Matching**: Iterate through categories in **alphabetical order** of their keys:
-    1.  `abuse`
-    2.  `cybercrime`
-    3.  `drugs`
-    4.  `extremism`
-    5.  `fraud`
-    6.  `self_harm`
-    7.  `sexual`
-    8.  `threats`
-    9.  `violence`
-    10. `weapons`
-4.  **Score Accumulation**:
-    - For each category, sum `KEYWORD_WEIGHT` (0.2) per unique detected keyword.
-    - Clamp category sub-score to `MAX_CATEGORY_SCORE` (0.6).
-    - Add category sub-score to `Total Score`.
-5.  **Global Clamping**: Clamp `Total Score` to 1.0.
-6.  **Risk Categorization**: Map `Total Score` to Category (Low/Medium/High).
-7.  **Confidence Calculation**: Apply penalties.
-8.  **Output Formatting**: Round floats to 2 decimal places.
+## 2. Invariants
+### 2.1 Identity
+$$ S(\text{""}) = 0.0 $$
+An empty input string must always produce a score of 0.0 (or trigger an `EMPTY_INPUT` error).
 
-## 3. Forbidden States
-The system must never produce an output in these states.
+### 2.2 Boundedness
+$$ \forall T, 0.0 \le S(T) \le 1.0 $$
+The final score is strictly clamped between 0.0 and 1.0 inclusive.
 
-- **State F-1**: `risk_score` > 1.0 or < 0.0.
-- **State F-2**: `risk_category` matches "HIGH" but `risk_score` < 0.7.
-- **State F-3**: `risk_category` matches "LOW" but `risk_score` >= 0.3.
-- **State F-4**: `trigger_reasons` is empty when `risk_score` > 0.0.
+### 2.3 Idempotence (Statelessness)
+$$ S(T)_t = S(T)_{t+\Delta} $$
+The score for a fixed input $T$ must be identical regardless of when it is computed or what internal state (e.g., caches) exists.
 
-## 4. Arithmetic Precision
-- All floating point operations use standard IEEE 754 double precision (Python `float`).
-- **Rounding**: Final output scores are rounded to 2 decimal places using "Round Half Up" logic implicitly by Python's `round()`, but for strict determinism we accept standard default rounding behavior as long as it's consistent.
+### 2.4 Commutativity of Categories
+The order in which categories are evaluated **must not** affect the final `total_score`. 
+However, the `risk_category` derivation depends on `total_score`, so stability in `total_score` implies stability in `risk_category`.
+
+## 3. Evaluation Order
+To guarantee determinism in logging and side-effects (like the `trigger_reasons` list order), the engine enforces:
+1. **Category Order**: Alphabetical by category key.
+2. **Keyword Order**: Alphabetical (implied by deterministic iteration if not explicit, but explicit sort is safer).

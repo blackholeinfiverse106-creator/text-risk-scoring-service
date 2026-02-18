@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 class InputSchema(BaseModel):
     text: str
@@ -9,9 +9,9 @@ class ErrorSchema(BaseModel):
     message: str
 
 class SafetyMetadata(BaseModel):
-    is_decision: bool
-    authority: str
-    actionable: bool
+    is_decision: Literal[False]
+    authority: Literal["NONE"]
+    actionable: Literal[False]
 
 class OutputSchema(BaseModel):
     risk_score: float

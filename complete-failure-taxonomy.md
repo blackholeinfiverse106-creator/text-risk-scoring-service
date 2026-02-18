@@ -1,98 +1,36 @@
-# Complete Failure Taxonomy & Exhaustion Report
+# Complete Failure Taxonomy
 
-**Version**: 2.0 (Final Sealing)  
-**Status**: VERIFIED  
-**Purpose**: Enumerate ALL failure paths and prove "Fail-Closed" behavior.
+## 1. Input Errors (Client-Side)
+Errors caused by malformed or invalid client requests. Always actionable by the client.
 
----
+| Code | Description | HTTP Status | Action |
+| :--- | :--- | :--- | :--- |
+| `EMPTY_INPUT` | Input string is empty after trimming. | 400 | Provide non-empty text. |
+| `INVALID_TYPE` | Input is not a JSON string. | 422 | Ensure `text` field is a string. |
+| `EXCESSIVE_LENGTH` | Input exceeds 5000 chars. | 400 | Truncate input before sending. |
+| `INVALID_JSON` | Malformed JSON body. | 400 | Fix JSON syntax. |
+| `DECISION_INJECTION`| Client attempted to inject decision fields. | 403 | Remove `decision` or `override` fields. |
 
-## 1. Failure Path Enumeration
+## 2. Execution Errors (System-Side)
+Unexpected runtime failures. Indicates a bug or infrastructure issue.
 
-### 1.1 Input Layer Failures
-*Failures occurring before processing begins.*
+| Code | Description | Severity | Policy |
+| :--- | :--- | :--- | :--- |
+| `INTERNAL_ERROR` | Unhandled exception (e.g., KeyError). | High | Log stack trace, return 500. |
+| `TIMEOUT` | Processing exceeded time limit. | Medium | Retry with backoff. |
+| `RESOURCE_EXHAUSTED`| System OOM or CPU starvation. | Critical | Fail closed, alert SRE. |
 
-| ID | Scenario | Detection | Error Contract | Result |
-| :--- | :--- | :--- | :--- | :--- |
-| **I-01** | Null/Missing Input | `validate_input_contract` | `MISSING_FIELD` | 🛑 Blocked |
-| **I-02** | Invalid Type (Int/Bool) | `validate_input_contract` | `INVALID_TYPE` | 🛑 Blocked |
-| **I-03** | Malformed JSON | FastAPI Middleware | 400 Bad Request | 🛑 Blocked |
-| **I-04** | Invalid Encoding (Non-UTF8) | `validate_input_contract` | `INVALID_ENCODING` | 🛑 Blocked |
-| **I-05** | Forbidden Fields | `validate_input_contract` | `FORBIDDEN_FIELD` | 🛑 Blocked |
-| **I-06** | Invalid Context | `validate_input_contract` | `INVALID_CONTEXT` | 🛑 Blocked |
-| **I-07** | Enforcement Role | `validate_input_contract` | `FORBIDDEN_ROLE` | 🛑 Blocked |
-| **I-08** | Decision Injection | `validate_input_contract` | `DECISION_INJECTION` | 🛑 Blocked |
+## 3. Scoring Violations (Logic Integrity)
+Logic invariants broken during execution.
 
-### 1.2 Runtime Layer Failures
-*Failures during execution.*
+| Code | Description | Handling |
+| :--- | :--- | :--- |
+| `INVARIANT_VIOLATION`| Score/Category mismatch (e.g. 0.9/LOW). | **Fail-Closed**: Force Risk=HIGH, Log Error. |
+| `IMPOSSIBLE_STATE` | Negative score or NaN. | **Fail-Closed**: Return Error, do not score. |
 
-| ID | Scenario | Detection | Behavior | Result |
-| :--- | :--- | :--- | :--- | :--- |
-| **R-01** | Empty String | `analyze_text` guard | `EMPTY_INPUT` | 🛑 Blocked |
-| **R-02** | Excessive Length | `analyze_text` guard | Truncation to 5000 chars | ⚠️ Handled |
-| **R-03** | Unexpected Exception | `try/except` block | `INTERNAL_ERROR` | 🛑 Blocked (Safe) |
-| **R-04** | Regex Timeout (Hypothetical) | None (Gap identified) | (Potential Hang) | ⚠️ Identified Gap |
-| **R-05** | Memory Exhaustion | OS/Container | Process Crash | 🛑 Fail Closed |
-
-### 1.3 Scoring Layer Failures
-*Failures in logic or thresholds.*
-
-| ID | Scenario | Condition | Resulting State | Saftey |
-| :--- | :--- | :--- | :--- | :--- |
-| **S-01** | Zero Keywords | Score = 0.0 | LOW Risk | ✅ Safe |
-| **S-02** | Score Saturation | Score > 1.0 | Clamped to 1.0 | ✅ Safe |
-| **S-03** | Ambiguity | High Score + Low Confidence | MEDIUM Risk | ✅ Flagged |
-| **S-04** | Category Overlap | Multiple Categories | Aggregated Score | ✅ Safe |
-
-### 1.4 Output Layer Failures
-*Failures in response generation.*
-
-| ID | Scenario | Detection | Error Contract | Result |
-| :--- | :--- | :--- | :--- | :--- |
-| **O-01** | Missing Metadata | `validate_output_contract` | `INTERNAL_ERROR` | 🛑 Blocked |
-| **O-02** | Invalid Types | `validate_output_contract` | `INTERNAL_ERROR` | 🛑 Blocked |
-| **O-03** | Authority Leak | `validate_output_contract` | `INTERNAL_ERROR` | 🛑 Blocked |
-
----
-
-## 2. Proof of No Silent Failures
-
-### Theorem
-> "Every exception path in the application resolves to a structured JSON error response code, never a silent failure or raw stack trace."
-
-### Evidence
-1.  **Input Phase**: Wrapped in `try...except ContractViolation`.
-    -   Catches all contract breaches.
-    -   Returns structured `errors` object.
-2.  **Execution Phase**: Wrapped in `try...except Exception`.
-    -   Catches `KeyError`, `ValueError`, `TypeError`.
-    -   Logs stack trace internally.
-    -   Returns `INTERNAL_ERROR` to user.
-3.  **Output Phase**: Validated by `validate_output_contract`.
-    -   Ensures even error responses meet schema.
-
----
-
-## 3. Explicit Error Contracts
-
-The system guarantees ONLY the following error codes:
-
-```json
-[
-  "INVALID_TYPE", 
-  "EMPTY_INPUT", 
-  "EXCESSIVE_LENGTH", 
-  "INVALID_ENCODING", 
-  "FORBIDDEN_FIELD", 
-  "MISSING_FIELD", 
-  "INTERNAL_ERROR",
-  "INVALID_CONTEXT",
-  "FORBIDDEN_ROLE",
-  "DECISION_INJECTION"
-]
-```
-
-Any other error code is a system defect.
-
----
-
-**Failure Exhaustion: COMPLETE ✓**
+## 4. Resource Exhaustion (DoS Protection)
+| Limit | Threshold | Consequence |
+| :--- | :--- | :--- |
+| **Payload Size** | 5000 chars | Truncation + Warning Log. |
+| **Request Rate** | Defined at Gateway | 429 Too Many Requests. |
+| **Recursion Depth** | Flat (Iterative only) | N/A (By Design). |

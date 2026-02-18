@@ -1,35 +1,34 @@
 # Rule Resolution Matrix
 
-This matrix defines the deterministic outcome when multiple risk factors are present.
+## 1. Category Precedence
+When multiple categories are detected, the system must deterministically decide the "Primary Category" behavior if a tie-breaker is needed, or simply for informative purposes.
+The hierarchy is strictly defined as follows (Highest Priority First):
 
-## 1. Category Interactions
+1. **Child Safety** (sexual_minor, self_harm)
+2. **Violence** (violence, weapons, threats)
+3. **Extremism** (extremism, cybercrime)
+4. **Illegal** (drugs, fraud)
+5. **Harassment** (abuse, sexual)
 
-| Category A | Category B | Interaction Type | Resolution Rule |
-| :--- | :--- | :--- | :--- |
-| **Violence** | **Threats** | Synergistic | Score adds up (bounded by global max). Reasons list both. |
-| **Self-Harm** | **Violence** | Distinct | Score adds up. Distinct intents. |
-| **Fraud** | **Cybercrime** | Overlapping | Score adds up. Often appear together in "scam" contexts. |
-| **Sexual** | **Abuse** | Aggravating | Score adds up. Harassment with sexual undertones is high risk. |
+## 2. Conflict Resolution Table
 
-*Note: Currently, all categories are additive. There are no safe-listing or canceling interactions.*
-
-## 2. Priority & Ordering
-When generating `trigger_reasons`, the order is fixed by the category evaluation order (Alphabetical).
-
-**Example Output Order:**
-1. Abuse
-2. Cybercrime
-3. ...
-4. Violence
-5. Weapons
-
-## 3. Confidence Penalties Matrix
-
-| Condition | Penalty | Rationale |
+| Matched Categories | Resolved "Primary" (Reported in Log) | Rationale |
 | :--- | :--- | :--- |
-| **0 Keywords** | N/A | Base confidence 1.0 (Low Risk, High Confidence) |
-| **1 Keyword Only** | -0.3 | Single keyword might be noise/contextual. |
-| **> 1 Category** | -0.2 | Multiple categories *can* imply complex context, slightly reducing certainty of specific classification (Legacy logic preserved). |
-| **<= 2 Keywords Total** | -0.2 | Low data volume reduces detection confidence. |
+| {Self_Harm, Violence} | Self_Harm | Immediate life safety takes precedence. |
+| {Terrorism, Violence} | Terrorism | Specific intent > General action. |
+| {Fraud, Abuse} | Fraud | Financial risk usually implies systemic actor. |
+| {Drugs, Sexual} | Drugs | Illegal goods > Content policy (generally). |
 
-*Note: Penalties are cumulative but Confidence is lower-bounded at 0.0.*
+*Note: The current engine sums ALL scores. This matrix specifically governs the `trigger_reasons` ordering or any future "Primary Label" field.*
+
+## 3. Illegal Path Rejection
+The engine explicitly rejects the following semantic combinations as "Illegal/Impossible" and flags them as anomalies:
+- `Score > 0.0` but `reasons` is empty.
+- `Score == 0.0` but `risk_category` is `HIGH`.
+- `processed_length` != actual length of normalized text.
+
+## 4. Resolution Function
+$$
+Resolved(C_{matched}) = \text{argmax}_{c \in C_{matched}} (Priority(c))
+$$
+Where $Priority(c)$ is the integer rank defined in Section 1.
