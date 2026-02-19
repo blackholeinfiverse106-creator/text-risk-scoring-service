@@ -1,0 +1,14 @@
+{
+  "status": "PASSED",
+  "memory_guard": {
+    "allocation_delta_mb": 0.086,
+    "safe_threshold_mb": 5.0,
+    "pass": true
+  },
+  "rate_limiter_sim": {
+    "total_requests": 1000,
+    "accepted": 105,
+    "rejected": 895,
+    "protection_active": true
+  }
+}

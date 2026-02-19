@@ -33,8 +33,31 @@ def test_determinism_10k_runs():
     initial_hash = get_semantic_hash(initial)
     
     # Stress Loop
-    for i in range(100): # Reduced to 100 for CI speed, 10k for full soak
+    # Stress Loop
+    ITERATIONS = 1000
+    print(f"Starting {ITERATIONS} iterations...")
+    
+    for i in range(ITERATIONS):
         current = analyze_text(text)
         current_hash = get_semantic_hash(current)
         
-        assert current_hash == initial_hash, f"Drift detected at iteration {i}"
+        if current_hash != initial_hash:
+            raise AssertionError(f"Drift detected at iteration {i}")
+            
+    print("Success: All iterations matched.")
+    
+    # Generate Artifact
+    report = {
+        "status": "PASSED",
+        "iterations": ITERATIONS,
+        "input_hash": hashlib.sha256(text.encode()).hexdigest(),
+        "output_hash": initial_hash,
+        "consistency": "100%"
+    }
+    
+    with open("determinism_benchmark_report.json", "w") as f:
+        json.dump(report, f, indent=2)
+    print("Artifact generated: determinism_benchmark_report.json")
+
+if __name__ == "__main__":
+    test_determinism_10k_runs()

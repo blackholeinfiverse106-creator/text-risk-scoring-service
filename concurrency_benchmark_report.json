@@ -1,0 +1,8 @@
+{
+  "status": "WARNING",
+  "concurrency": 50,
+  "total_requests": 1000,
+  "mean_latency_ms": 176.06,
+  "p99_latency_ms": 235.05,
+  "max_latency_ms": 239.85
+}
