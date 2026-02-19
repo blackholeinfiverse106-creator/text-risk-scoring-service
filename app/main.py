@@ -7,7 +7,10 @@ from app.contract_enforcement import validate_input_contract, validate_output_co
 import json
 import logging
 import uuid
+from app.observability import setup_json_logging
 
+# Initialize JSON logging
+setup_json_logging()
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Text Risk Scoring Service")
@@ -23,25 +26,25 @@ app.add_middleware(
 @app.post("/analyze", response_model=OutputSchema)
 def analyze(payload: InputSchema):
     correlation_id = str(uuid.uuid4())[:8]
-    logger.info(f"Request received | correlation_id={correlation_id} | event_type=analysis_request")
+    logger.info("Request received", extra={"correlation_id": correlation_id, "event_type": "analysis_request"})
     
     try:
         request_data = payload.dict()
-        logger.debug(f"Input validation starting | correlation_id={correlation_id} | event_type=contract_enforcement")
+        logger.debug("Input validation starting", extra={"correlation_id": correlation_id, "event_type": "contract_enforcement"})
         
         text = validate_input_contract(request_data)
-        logger.info(f"Input validated | correlation_id={correlation_id} | event_type=contract_passed | length={len(text)}")
+        logger.info(f"Input validated | length={len(text)}", extra={"correlation_id": correlation_id, "event_type": "contract_passed", "details": {"length": len(text)}})
         
         response = analyze_text(text, correlation_id=correlation_id)
-        logger.info(f"Analysis complete | correlation_id={correlation_id} | event_type=engine_success | risk={response['risk_category']}")
+        logger.info(f"Analysis complete | risk={response['risk_category']}", extra={"correlation_id": correlation_id, "event_type": "engine_success", "details": {"risk": response['risk_category']}})
         
         validate_output_contract(response)
-        logger.debug(f"Output validated | correlation_id={correlation_id} | event_type=contract_enforcement_passed")
+        logger.debug("Output validated", extra={"correlation_id": correlation_id, "event_type": "contract_enforcement_passed"})
         
         return response
         
     except ContractViolation as e:
-        logger.warning(f"Contract violation | correlation_id={correlation_id} | event_type=input_validation_failed | code={e.code} | why={e.message}")
+        logger.warning(f"Contract violation | code={e.code}", extra={"correlation_id": correlation_id, "event_type": "input_validation_failed", "details": {"code": e.code, "why": e.message}})
         return {
             "risk_score": 0.0,
             "confidence_score": 0.0,

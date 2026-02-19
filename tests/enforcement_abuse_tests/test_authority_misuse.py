@@ -3,6 +3,9 @@ Test: Authority Misuse Scenarios
 Validates that system resists being treated as decision authority
 """
 import pytest
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from app.engine import analyze_text
 
 class TestAuthorityMisuse:

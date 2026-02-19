@@ -7,11 +7,7 @@ from typing import Dict, Any
 # =========================
 # Logging Setup (STEP 3.1)
 # =========================
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s"
-)
-
+# Logging configured by main app entry point
 logger = logging.getLogger(__name__)
 
 # =========================
@@ -133,11 +129,11 @@ RISK_KEYWORDS = {
 # =========================
 # Error Response Helper
 # =========================
-def error_response(code: str, message: str, correlation_id: str = None) -> Dict[str, Any]:
-    if correlation_id:
-        logger.error("Error response generated | correlation_id=%s | code=%s | message=%s", correlation_id, code, message)
-    else:
-        logger.error("Error response generated | code=%s | message=%s", code, message)
+def error_response(code: str, message: str, correlation_id: str = "UNKNOWN") -> Dict[str, Any]:
+    logger.error(
+        f"Error response generated: {code}",
+        extra={"correlation_id": correlation_id, "event_type": "error_response_generated", "details": {"code": code, "message": message}}
+    )
     return {
         "risk_score": 0.0,
         "confidence_score": 0.0,
@@ -155,7 +151,6 @@ def error_response(code: str, message: str, correlation_id: str = None) -> Dict[
         }
     }
 
-
 # =========================
 # Core Analysis Function
 # =========================
@@ -163,14 +158,14 @@ def analyze_text(text: str, correlation_id: str = "UNKNOWN") -> Dict[str, Any]:
     try:
         start_time = time.time()
         
-        logger.info("Request started | correlation_id=%s | event_type=analysis_start", correlation_id)
+        logger.info("Request started", extra={"correlation_id": correlation_id, "event_type": "analysis_start"})
         # =========================
         # F-02: INVALID TYPE
         # =========================
         if not isinstance(text, str):
             return error_response("INVALID_TYPE", "Input must be a string", correlation_id)
 
-        logger.info("Received text for analysis | correlation_id=%s | event_type=input_received | raw_length=%d", correlation_id, len(text))
+        logger.info(f"Received text for analysis | len={len(text)}", extra={"correlation_id": correlation_id, "event_type": "input_received", "details": {"raw_length": len(text)}})
 
         # Normalize input
         text = text.strip().lower()
@@ -187,8 +182,8 @@ def analyze_text(text: str, correlation_id: str = "UNKNOWN") -> Dict[str, Any]:
         truncated = False
         if len(text) > MAX_TEXT_LENGTH:
             logger.warning(
-                "Input truncated | correlation_id=%s | event_type=input_truncated | original_length=%d | max_length=%d",
-                correlation_id, len(text), MAX_TEXT_LENGTH
+                "Input truncated",
+                extra={"correlation_id": correlation_id, "event_type": "input_truncated", "details": {"original_length": len(text), "max_length": MAX_TEXT_LENGTH}}
             )
             text = text[:MAX_TEXT_LENGTH]
             truncated = True
@@ -209,8 +204,8 @@ def analyze_text(text: str, correlation_id: str = "UNKNOWN") -> Dict[str, Any]:
                 pattern = r"\b" + re.escape(keyword) + r"\b"
                 if re.search(pattern, text):
                     logger.info(
-                        "Keyword detected | correlation_id=%s | event_type=keyword_detected | category=%s | keyword=%s",
-                        correlation_id, category, keyword
+                        f"Keyword detected: {keyword}",
+                        extra={"correlation_id": correlation_id, "event_type": "keyword_detected", "details": {"category": category, "keyword": keyword}}
                     )
                     category_score += KEYWORD_WEIGHT
                     matched_keywords.append(keyword)
@@ -222,8 +217,8 @@ def analyze_text(text: str, correlation_id: str = "UNKNOWN") -> Dict[str, Any]:
             # =========================
             if category_score > MAX_CATEGORY_SCORE:
                 logger.warning(
-                    "Category score capped | correlation_id=%s | event_type=category_capped | category=%s | raw_score=%.2f | cap=%.2f",
-                    correlation_id, category, category_score, MAX_CATEGORY_SCORE
+                    f"Category score capped for {category}",
+                    extra={"correlation_id": correlation_id, "event_type": "category_capped", "details": {"category": category, "raw_score": category_score, "cap": MAX_CATEGORY_SCORE}}
                 )
                 category_score = MAX_CATEGORY_SCORE
 
@@ -234,8 +229,8 @@ def analyze_text(text: str, correlation_id: str = "UNKNOWN") -> Dict[str, Any]:
         # =========================
         if total_score > 1.0:
             logger.warning(
-                "Total score clamped | correlation_id=%s | event_type=score_clamped | raw_score=%.2f | cap=1.0",
-                correlation_id, total_score
+                "Total score clamped",
+                extra={"correlation_id": correlation_id, "event_type": "score_clamped", "details": {"raw_score": total_score, "cap": 1.0}}
             )
             total_score = 1.0
 
@@ -256,11 +251,11 @@ def analyze_text(text: str, correlation_id: str = "UNKNOWN") -> Dict[str, Any]:
         # =========================
         # F-02: Score/Category Mismatch Prevention
         if total_score >= 0.7 and risk_category != "HIGH":
-             logger.error("Invariant violation detected | correlation_id=%s | event_type=invariant_correction | score=%.2f | category=%s | correction=HIGH", correlation_id, total_score, risk_category)
+             logger.error("Invariant violation detected", extra={"correlation_id": correlation_id, "event_type": "invariant_correction", "details": {"score": total_score, "category": risk_category, "correction": "HIGH"}})
              risk_category = "HIGH"
         
         if total_score < 0.3 and risk_category == "HIGH":
-             logger.error("Invariant violation detected | correlation_id=%s | event_type=invariant_correction | score=%.2f | category=HIGH | correction=LOW", correlation_id, total_score)
+             logger.error("Invariant violation detected", extra={"correlation_id": correlation_id, "event_type": "invariant_correction", "details": {"score": total_score, "category": "HIGH", "correction": "LOW"}})
              risk_category = "LOW"
 
         # =========================
@@ -284,8 +279,8 @@ def analyze_text(text: str, correlation_id: str = "UNKNOWN") -> Dict[str, Any]:
 
         processing_time = time.time() - start_time
         logger.info(
-            "Final decision | correlation_id=%s | event_type=analysis_complete | score=%.2f | confidence=%.2f | category=%s | processing_time=%.3fms",
-            correlation_id, total_score, confidence, risk_category, processing_time * 1000
+            f"Final decision: {risk_category}",
+            extra={"correlation_id": correlation_id, "event_type": "analysis_complete", "details": {"score": total_score, "confidence": confidence, "category": risk_category, "processing_time_ms": processing_time * 1000}}
         )
 
         if truncated:
@@ -310,9 +305,9 @@ def analyze_text(text: str, correlation_id: str = "UNKNOWN") -> Dict[str, Any]:
     # =========================
     except Exception:
         logger.error(
-            "Unexpected runtime error during text analysis | correlation_id=%s | event_type=unhandled_exception",
-            correlation_id,
-            exc_info=True
+            "Unexpected runtime error during text analysis",
+            exc_info=True,
+            extra={"correlation_id": correlation_id, "event_type": "unhandled_exception"}
         )
         return error_response(
             "INTERNAL_ERROR",

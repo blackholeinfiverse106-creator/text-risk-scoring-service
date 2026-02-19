@@ -33,3 +33,4 @@ This document maps specific misuse vectors to the system's deterministic respons
 These scenarios are structurally enforced by `app/contract_enforcement.py` and verified by:
 - `tests/forbidden_usage_tests/test_context_rejection.py`
 - `tests/forbidden_usage_tests/test_role_rejection.py`
+- `tests/enforcement_abuse_tests/test_authority_misuse.py`

@@ -1,21 +1,15 @@
 import pytest
 import logging
 import io
-import re
+import json
 from app.engine import analyze_text
-
-# Regex to parse structured logs
-# Format: "... | event_type=X | param=Y ..."
-LOG_PATTERN = re.compile(r"event_type=([a-zA-Z_]+)")
-KEYWORD_PATTERN = re.compile(r"category=([a-zA-Z_]+)")
 
 def replay_score_from_logs(log_content: str) -> float:
     """
-    Reconstructs the risk score purely by parsing the log stream.
+    Reconstructs the risk score purely by parsing the log stream (JSON format).
     Simulates an 'Audit Replay' of the decision.
     """
     category_scores = {}
-    current_category = None
     
     # Constants from Contract (Must match engine)
     KEYWORD_WEIGHT = 0.2
@@ -23,22 +17,22 @@ def replay_score_from_logs(log_content: str) -> float:
     MAX_TOTAL_SCORE = 1.0
     
     for line in log_content.splitlines():
-        event_match = LOG_PATTERN.search(line)
-        if not event_match:
+        try:
+            log_entry = json.loads(line)
+        except json.JSONDecodeError:
             continue
             
-        event_type = event_match.group(1)
+        event_type = log_entry.get("event_type")
+        details = log_entry.get("details", {})
         
         if event_type == "keyword_detected":
-            cat_match = KEYWORD_PATTERN.search(line)
-            if cat_match:
-                cat = cat_match.group(1)
+            cat = details.get("category")
+            if cat:
                 category_scores[cat] = category_scores.get(cat, 0.0) + KEYWORD_WEIGHT
                 
         elif event_type == "category_capped":
-            cat_match = KEYWORD_PATTERN.search(line)
-            if cat_match:
-                cat = cat_match.group(1)
+            cat = details.get("category")
+            if cat:
                 # If capped, force score to max
                 category_scores[cat] = MAX_CATEGORY_SCORE
                 
@@ -46,7 +40,6 @@ def replay_score_from_logs(log_content: str) -> float:
     total_score = sum(category_scores.values())
     
     # Apply global clamp if needed (implied by design, but engine logs it too)
-    # We can assume the standard clamp 1.0
     if total_score > MAX_TOTAL_SCORE:
         total_score = MAX_TOTAL_SCORE
         
@@ -55,11 +48,19 @@ def replay_score_from_logs(log_content: str) -> float:
 def test_audit_log_completeness():
     """
     Verifies that the logs contain sufficient information to reconstruct the risk score.
+    Now supports JSON structured logging.
     """
     # 1. Setup Capture
     log_capture = io.StringIO()
     handler = logging.StreamHandler(log_capture)
-    handler.setFormatter(logging.Formatter("%(message)s"))
+    # JsonFormatter is already configured on root logger in main.py, 
+    # but for this test we need to capture the output of *our* fixture or the app's logger.
+    # Since analyze_text uses 'app.engine' logger which propagates to root,
+    # we can just attach a basic handler to root and rely on the fact that log records 
+    # are already formatted *if* we attached a formatter, OR we can attach our own JsonFormatter here.
+    
+    from app.observability import JsonFormatter
+    handler.setFormatter(JsonFormatter())
     
     root_logger = logging.getLogger()
     root_logger.addHandler(handler)
@@ -75,6 +76,7 @@ def test_audit_log_completeness():
         
         # 3. Get Logs
         log_contents = log_capture.getvalue()
+        print("\nCaptured Logs:\n", log_contents) # Debug output
         
         # 4. Replay / Reconstruct
         reconstructed_score = replay_score_from_logs(log_contents)
@@ -83,10 +85,10 @@ def test_audit_log_completeness():
         assert result["risk_score"] == 0.8
         assert reconstructed_score == 0.8
         
-        # Verify specific events exist
-        assert "event_type=keyword_detected" in log_contents
-        assert "event_type=category_capped" in log_contents
-        assert "category=violence" in log_contents
+        # Verify specific events exist in JSON
+        assert "keyword_detected" in log_contents
+        assert "category_capped" in log_contents
+        assert "violence" in log_contents
         
     finally:
         root_logger.removeHandler(handler)
