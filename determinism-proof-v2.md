@@ -1,4 +1,4 @@
-# Deterministic Proof v2
+    # Deterministic Proof v2
 
 ## 1. Objective
 Prove that the Text Risk Scoring Service is $100\%$ deterministic at the bit level for all response-significant data.
