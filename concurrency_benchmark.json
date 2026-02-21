@@ -1,0 +1,20 @@
+{
+  "run_timestamp": "2026-02-21T12:33:49.373899",
+  "concurrency": 500,
+  "total_requests": 500,
+  "succeeded": 500,
+  "failed": 0,
+  "failures": [],
+  "throughput_rps": 415.98,
+  "latency_ms": {
+    "mean": 2.422,
+    "stdev": 5.699,
+    "min": 0.004,
+    "p50": 0.374,
+    "p95": 16.389,
+    "p99": 17.234,
+    "max": 35.758
+  },
+  "wall_time_seconds": 1.202,
+  "verdict": "PASSED"
+}

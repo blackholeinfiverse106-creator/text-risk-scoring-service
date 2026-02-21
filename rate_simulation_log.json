@@ -1,0 +1,79 @@
+{
+  "run_timestamp": "2026-02-21T12:44:47.687658",
+  "verdict": "PASSED",
+  "wall_time_s": 4.6,
+  "simulations": [
+    {
+      "sim": "burst_flood",
+      "total_requests": 2000,
+      "accepted": 102,
+      "rejected": 1898,
+      "rejection_rate": 0.949,
+      "protection_active": true,
+      "wall_time_s": 0.041,
+      "avg_latency_ms": 0.383,
+      "passed": true
+    },
+    {
+      "sim": "sustained_load",
+      "target_rps": 80,
+      "actual_rps": 72.62,
+      "duration_s": 3,
+      "attempts": 218,
+      "accepted": 218,
+      "rejected": 0,
+      "rejection_rate": 0.0,
+      "avg_latency_ms": 0.419,
+      "wall_time_s": 3.002,
+      "passed": true
+    },
+    {
+      "sim": "bursty_traffic",
+      "cycles": 3,
+      "total_accepted": 117,
+      "total_rejected": 498,
+      "spike_throttled_all": true,
+      "total_spike_rejected": 496,
+      "cycles_data": [
+        {
+          "cycle": 1,
+          "quiet": {
+            "accepted": 5,
+            "rejected": 0
+          },
+          "spike": {
+            "accepted": 51,
+            "rejected": 149
+          },
+          "spike_throttled": true
+        },
+        {
+          "cycle": 2,
+          "quiet": {
+            "accepted": 4,
+            "rejected": 1
+          },
+          "spike": {
+            "accepted": 27,
+            "rejected": 173
+          },
+          "spike_throttled": true
+        },
+        {
+          "cycle": 3,
+          "quiet": {
+            "accepted": 4,
+            "rejected": 1
+          },
+          "spike": {
+            "accepted": 26,
+            "rejected": 174
+          },
+          "spike_throttled": true
+        }
+      ],
+      "wall_time_s": 1.557,
+      "passed": true
+    }
+  ]
+}
