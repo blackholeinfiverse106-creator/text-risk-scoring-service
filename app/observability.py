@@ -1,7 +1,6 @@
 import logging
 import json
-import time
-from typing import Any, Dict
+from typing import Dict, Any
 
 class JsonFormatter(logging.Formatter):
     """
@@ -45,17 +44,3 @@ def setup_json_logging():
     # We want to ensure only our JSON handler is active for app logs
     # Note: Uvicorn has its own logging setup, this mainly affects app application code.
 
-class StructuredLogger(logging.LoggerAdapter):
-    """
-    Adapter to easily inject correlation_id and event_type into logs.
-    """
-    def process(self, msg: str, kwargs: Dict[str, Any]) -> tuple[str, Dict[str, Any]]:
-        # This is where we could perform additional processing
-        # For now, we rely on the caller passing 'extra' or we explicity handle it here if we wanted a cleaner API
-        # But standard logging doesn't easily support kwargs->extra mapping without this adapter.
-        
-        # To make it easy: logger.info("msg", extra={"correlation_id": "...", "event_type": "..."})
-        return msg, kwargs
-
-def get_logger(name: str):
-    return logging.getLogger(name)

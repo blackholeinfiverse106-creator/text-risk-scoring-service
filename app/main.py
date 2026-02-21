@@ -1,10 +1,9 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.schemas import InputSchema, OutputSchema
 from app.engine import analyze_text
 from app.contract_enforcement import validate_input_contract, validate_output_contract, ContractViolation
-import json
 import logging
 import uuid
 from app.observability import setup_json_logging

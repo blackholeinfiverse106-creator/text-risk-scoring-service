@@ -191,7 +191,7 @@ def analyze_text(text: str, correlation_id: str = "UNKNOWN") -> Dict[str, Any]:
         total_score = 0.0
         reasons = []
 
-        matched_keywords = []
+        keyword_count = 0
         matched_categories = set()
 
         # =========================
@@ -208,7 +208,7 @@ def analyze_text(text: str, correlation_id: str = "UNKNOWN") -> Dict[str, Any]:
                         extra={"correlation_id": correlation_id, "event_type": "keyword_detected", "details": {"category": category, "keyword": keyword}}
                     )
                     category_score += KEYWORD_WEIGHT
-                    matched_keywords.append(keyword)
+                    keyword_count += 1
                     matched_categories.add(category)
                     reasons.append(f"Detected {category} keyword: {keyword}")
 
@@ -247,9 +247,8 @@ def analyze_text(text: str, correlation_id: str = "UNKNOWN") -> Dict[str, Any]:
             risk_category = "HIGH"
 
         # =========================
-        # INVARIANT ENFORCEMENT (FAIL-SAFE)
+        # INVARIANT CHECK: Score/Category Consistency
         # =========================
-        # F-02: Score/Category Mismatch Prevention
         if total_score >= 0.7 and risk_category != "HIGH":
              logger.error("Invariant violation detected", extra={"correlation_id": correlation_id, "event_type": "invariant_correction", "details": {"score": total_score, "category": risk_category, "correction": "HIGH"}})
              risk_category = "HIGH"
@@ -259,10 +258,9 @@ def analyze_text(text: str, correlation_id: str = "UNKNOWN") -> Dict[str, Any]:
              risk_category = "LOW"
 
         # =========================
-        # CONFIDENCE LOGIC (TASK 3 - DAY 2)
+        # CONFIDENCE SCORE
         # =========================
         confidence = 1.0
-        keyword_count = len(matched_keywords)
         category_count = len(matched_categories)
 
         if keyword_count == 0:

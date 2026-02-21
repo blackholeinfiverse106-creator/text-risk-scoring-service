@@ -2,320 +2,140 @@
 
 [![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)](https://fastapi.tiangolo.com/)
-[![License](https://img.shields.io/badge/license-Educational-orange.svg)](#license)
+[![Release](https://img.shields.io/badge/release-v1.0.0--integration-green.svg)](#)
 
-A deterministic, explainable text risk scoring API built using FastAPI. The service analyzes raw text input and classifies it into predefined risk categories using rule-based logic, ensuring predictable, stable, and demo-safe behavior.
+A **deterministic, contract-sealed** text risk scoring API. Scores text content across 10 risk categories using rule-based keyword detection. Structurally incapable of making enforcement decisions.
 
-This project is designed as an **application-layer AI decision system**, focusing on reliability, safety, and explainability, rather than probabilistic ML accuracy.
+---
 
-## 📋 Table of Contents
+## Design Principles
 
-- [Overview](#overview)
-- [Problem Statement](#problem-statement)
-- [Design Philosophy](#design-philosophy)
-- [Key Features](#key-features)
-- [Risk Categories](#risk-categories)
-- [System Architecture](#system-architecture)
-- [Project Structure](#project-structure)
-- [Technology Stack](#technology-stack)
-- [API Contract](#api-contract)
-- [Example Request & Response](#example-request--response)
-- [Installation & Setup](#installation--setup)
-- [Running the Service](#running-the-service)
-- [Running Tests](#running-tests)
-- [Error Handling](#error-handling)
-- [Determinism & Safety Guarantees](#determinism--safety-guarantees)
-- [Limitations](#limitations)
-- [Future Improvements](#future-improvements)
-- [License](#license)
+| Principle | Implementation |
+|---|---|
+| Deterministic | Same input → same output, always (proven across 150k runs) |
+| Non-authority | `safety_metadata.authority` is permanently `"NONE"` |
+| Non-decision | `safety_metadata.is_decision` is permanently `false` |
+| Fail-safe | All error paths return a complete, structured response |
+| Stateless | No memory between requests; no shared mutable state |
 
-## 🎯 Overview
+---
 
-The Text Risk Scoring Service is a backend API that evaluates textual content and assigns a risk score and risk category based on predefined keyword-based rules.
+## Quick Start
 
-The system is **intentionally deterministic**:
+```bash
+# Clone and install
+python -m venv venv && venv\Scripts\activate
+pip install -r requirements.txt
 
-- ✅ The same input will always produce the same output
-- ✅ No randomness or probabilistic models are used
-- ✅ All decisions are explainable
+# Run server
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 
-This makes the service suitable for:
-
-- 🎪 **Demo environments**
-- 📊 **Evaluation tasks**
-- 🛡️ **Moderation pipelines**
-- 🤖 **Rule-based AI decision layers**
-
-## 🚨 Problem Statement
-
-In many real-world systems, especially demos and early-stage integrations, AI services must be:
-
-- **Predictable** - Same input, same output
-- **Explainable** - Clear reasoning for decisions
-- **Stable under bad input** - Graceful error handling
-- **Safe to expose publicly** - No security vulnerabilities
-
-This project solves the problem of text risk assessment without relying on black-box machine learning models, focusing instead on clarity, determinism, and robustness.
-
-## 🏗️ Design Philosophy
-
-The project follows these core principles:
-
-### 🎯 **Determinism over intelligence**
-Same input must always yield the same output.
-
-### 🔍 **Explainability over complexity**
-Every decision must include clear reasons.
-
-### 📋 **Contracts over assumptions**
-Input and output formats are strictly defined.
-
-### 🛡️ **Safety over performance**
-The system must never crash or return undefined behavior.
-
-### 🚀 **Application-layer AI**
-The focus is on building a reliable service, not training models.
-
-## ⭐ Key Features
-
-- 🎯 **Deterministic text risk scoring**
-- 🔍 **Rule-based keyword detection**
-- 📊 **Clear LOW / MEDIUM / HIGH classification**
-- 💡 **Explainable trigger reasons**
-- 🛡️ **Structured error handling**
-- 📚 **OpenAPI / Swagger documentation**
-- ✅ **Unit-tested logic**
-- 🚀 **Portable and easy to deploy**
-
-## 📊 Risk Categories
-
-The system classifies text into the following categories:
-
-### 🟢 **LOW**
-No or minimal risk indicators detected.
-
-### 🟡 **MEDIUM**
-Presence of one or more risk indicators without strong intent.
-
-### 🔴 **HIGH**
-Multiple high-severity indicators or explicit harmful intent.
-
-> Risk scoring is capped and normalized to ensure stable categorization.
-
-## 🏛️ System Architecture
-
-```
-Client / UI
-     |
-     |  HTTP POST /analyze
-     v
-FastAPI API Layer (main.py)
-     |
-     v
-Risk Engine (engine.py)
-     |
-     v
-Structured Response (schemas.py)
+# Run all tests
+python -m pytest tests/ decision-injection-tests/ escalation-tests/ -q
 ```
 
-**Key Design Decisions:**
-- 🎯 The API layer is intentionally thin
-- 🧠 All business logic resides in the engine
-- 📋 Schemas enforce strict input/output contracts
+---
 
-## 📁 Project Structure
+## API
 
-```
-text-risk-scoring-service/
-│
-├── app/
-│   ├── main.py        # FastAPI application entry point
-│   ├── engine.py      # Core risk scoring logic
-│   ├── schemas.py     # Pydantic input/output schemas
-│   └── __init__.py
-│
-├── tests/
-│   └── test_engine.py # Unit tests for risk logic
-│
-├── README.md          # Project documentation
-├── contracts.md       # API contracts
-├── HANDOVER.md        # Operational handover notes
-└── requirements.txt   # Python dependencies
+### `POST /analyze`
+
+**Request:**
+```json
+{
+  "text": "string (1–5000 chars, UTF-8)",
+  "context": {
+    "caller_id": "string (optional)",
+    "use_case":  "string (optional)"
+  }
+}
 ```
 
-## 🛠️ Technology Stack
+**Response:**
+```json
+{
+  "risk_score":       0.8,
+  "confidence_score": 0.8,
+  "risk_category":    "HIGH",
+  "trigger_reasons":  ["Detected violence keyword: kill"],
+  "processed_length": 42,
+  "safety_metadata": {
+    "is_decision": false,
+    "authority":   "NONE",
+    "actionable":  false
+  },
+  "errors": null
+}
+```
 
-- 🐍 **Python 3.10+** - Core language
-- ⚡ **FastAPI** – Modern, fast web framework
-- 📋 **Pydantic** – Data validation and schemas
-- 🚀 **Uvicorn** – Lightning-fast ASGI server
-- 🧪 **Pytest** – Testing framework
+**Risk categories:** `LOW` (score < 0.3) · `MEDIUM` (0.3–0.69) · `HIGH` (≥ 0.7)
 
-## 📡 API Contract
+**Error response shape** (same structure, `errors` is non-null, `risk_score` is 0.0).
 
-### Endpoint
-```http
+Full contract: see [`contracts-v3.md`](contracts-v3.md).
+
+---
+
+## Risk Categories
+
+| Category | Examples |
+|---|---|
+| violence | kill, attack, bomb, shoot |
+| fraud | scam, phishing, money laundering |
+| abuse | harassment, bully, slur |
+| sexual | explicit content, rape, minors |
+| drugs | cocaine, heroin, overdose |
+| extremism | terrorism, radicalize, ISIS |
+| self_harm | suicide, self harm, want to die |
+| cybercrime | malware, ransomware, SQL injection |
+| weapons | firearm, explosive, silencer |
+| threats | "I will kill you", blackmail |
+
+---
+
+## Architecture
+
+```
 POST /analyze
+     │
+     ├─ validate_input_contract()   [contract_enforcement.py]
+     ├─ analyze_text()              [engine.py]  ← all logic here
+     ├─ validate_output_contract()  [contract_enforcement.py]
+     └─ Return structured response
 ```
 
-### Request Body
-```json
-{
-  "text": "string"
-}
-```
+No database. No cache. No external calls. Fully self-contained.
 
-### Response Body
-```json
-{
-  "risk_score": 0.0,
-  "risk_category": "LOW | MEDIUM | HIGH",
-  "trigger_reasons": ["string"],
-  "processed_length": 0,
-  "errors": null
-}
-```
+---
 
-> 💡 The API always returns a structured response, even in error cases.
+## Proofs & Certification
 
-## 📝 Example Request & Response
+| Proof | Command | Result |
+|---|---|---|
+| Determinism | `python replay_harness.py` | 150k runs, 0 divergences |
+| Thread safety | `python thread_safety_proof.py` | 200 threads, 0 divergences |
+| Error propagation | `python error-propagation-proof.py` | 9/9 paths verified |
+| Trace lineage | `python trace-lineage-demo.py` | 3/3 proven, 0 bleed |
+| Misuse resistance | `python -m pytest decision-injection-tests/ escalation-tests/` | 67 tests pass |
 
-### Request
-```json
-{
-  "text": "this is a scam and hack attempt"
-}
-```
+---
 
-### Response
-```json
-{
-  "risk_score": 0.8,
-  "risk_category": "HIGH",
-  "trigger_reasons": [
-    "Detected fraud keyword: scam",
-    "Detected cybercrime keyword: hack"
-  ],
-  "processed_length": 32,
-  "errors": null
-}
-```
+## Key Documents
 
-## 🚀 Installation & Setup
+| Document | Purpose |
+|---|---|
+| [`contracts-v3.md`](contracts-v3.md) | **Frozen** API contract |
+| [`invariants-v2.md`](invariants-v2.md) | 14 revalidated invariants |
+| [`fail-mode-matrix.md`](fail-mode-matrix.md) | Fail-open vs fail-closed for every error code |
+| [`logging-schema-v1.md`](logging-schema-v1.md) | **Frozen** log schema |
+| [`misuse-matrix-v2.md`](misuse-matrix-v2.md) | 34 misuse vectors and contract responses |
+| [`FINAL-HANDOVER-PHASE-4.md`](FINAL-HANDOVER-PHASE-4.md) | Integration handover |
 
-### Prerequisites
+---
 
-- 🐍 Python 3.10 or higher
-- 📦 Git (optional)
+## Limitations
 
-### Setup
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/rajaryan0726/text-risk-scoring-service.git
-   cd text-risk-scoring-service
-   ```
-
-2. **Create virtual environment**
-   ```bash
-   python -m venv venv
-   ```
-
-3. **Activate virtual environment**
-   ```bash
-   # Windows
-   venv\Scripts\activate
-   
-   # macOS/Linux
-   source venv/bin/activate
-   ```
-
-4. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-## 🏃 Running the Service
-
-1. **Start the server**
-   ```bash
-   uvicorn app.main:app --reload
-   ```
-
-2. **Open Swagger UI in your browser:**
-   ```
-   http://127.0.0.1:8000/docs
-   ```
-
-3. **Alternative: ReDoc documentation:**
-   ```
-   http://127.0.0.1:8000/redoc
-   ```
-
-## 🧪 Running Tests
-
-```bash
-python -m pytest
-```
-
-**Expected output:**
-- ✅ All tests should pass
-- 📊 Confirms deterministic and stable behavior
-- 🛡️ Validates error handling
-
-### Run tests with coverage
-```bash
-python -m pytest --cov=app
-```
-
-## 🚨 Error Handling
-
-The service handles various error scenarios:
-
-- 📭 **Empty input**
-- 🔢 **Invalid input types**
-- 💥 **Unexpected failures**
-
-**Key guarantees:**
-- ✅ All errors are returned in a structured format under the `errors` field
-- ✅ The service never crashes or returns raw stack traces
-- ✅ HTTP status codes are meaningful and consistent
-
-## 🔒 Determinism & Safety Guarantees
-
-This service **guarantees**:
-
-- 🎯 **Same input → same output**
-- 🚫 **No randomness**
-- 🌐 **No dependency on external APIs**
-- 🛡️ **Stable behavior under edge cases**
-- 📊 **Predictable scoring thresholds**
-
-These guarantees make the system suitable for demos and evaluations.
-
-## ⚠️ Limitations
-
-- 🔤 **Keyword-based detection only**
-- 🧠 **No contextual NLP understanding**
-- 📚 **No learning or adaptation**
-- 🔐 **No authentication or rate limiting**
-
-> 💡 These limitations are **intentional** for clarity and safety.
-
-## 🚀 Future Improvements
-
-- 📊 **Category-wise weighted scoring**
-- 🔍 **Regex-based intent detection**
-- 🔐 **Authentication and API keys**
-- ⏱️ **Rate limiting**
-- 🐳 **Docker-based deployment**
-- ☁️ **Cloud hosting**
-- 📈 **Metrics and monitoring**
-- 🌍 **Multi-language support**
-
-## 📄 License
-
-This project is provided for **educational and evaluation purposes only**.
-
-## Reliability & Guarantees
-See `system-guarantees.md` for explicit system guarantees and limitations.
+- Keyword-density heuristic only — no NLP, no ML
+- No authentication or rate limiting (infra responsibility)
+- English only
+- Scores are not probabilities — do not use for automated enforcement
