@@ -1,0 +1,158 @@
+{
+  "run_timestamp": "2026-02-21T11:22:26.543111",
+  "iterations_per_case": 10000,
+  "total_cases": 15,
+  "verdict": "PROVEN",
+  "entries": [
+    {
+      "label": "clean_text",
+      "input_repr": "'This is perfectly safe content.'",
+      "status": "PASS",
+      "iterations": 10000,
+      "divergences": 0,
+      "first_divergence_iter": null,
+      "baseline_hash": "36bebb5401a61212a59827b0c6ac690a5cdd4a2d1909941ca547a86a9482df67",
+      "elapsed_seconds": 3.9946
+    },
+    {
+      "label": "single_violence_keyword",
+      "input_repr": "'kill'",
+      "status": "PASS",
+      "iterations": 10000,
+      "divergences": 0,
+      "first_divergence_iter": null,
+      "baseline_hash": "15e1ca8c4cc9e11ff3fe520067a26f0dffa395d981acae7390692edcddca57b9",
+      "elapsed_seconds": 3.035
+    },
+    {
+      "label": "single_fraud_keyword",
+      "input_repr": "'scam'",
+      "status": "PASS",
+      "iterations": 10000,
+      "divergences": 0,
+      "first_divergence_iter": null,
+      "baseline_hash": "56bca6407c0fa45c6385b2e154021cefa3479ff9bd706336f1af3da3ec23d4bf",
+      "elapsed_seconds": 2.9477
+    },
+    {
+      "label": "multi_category_high",
+      "input_repr": "'kill murder attack scam'",
+      "status": "PASS",
+      "iterations": 10000,
+      "divergences": 0,
+      "first_divergence_iter": null,
+      "baseline_hash": "18f9030a2db9e46b5b4cfd890db2f349c9c84ce323f995403366627e43a750ed",
+      "elapsed_seconds": 4.2794
+    },
+    {
+      "label": "max_length_safe",
+      "input_repr": "'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "status": "PASS",
+      "iterations": 10000,
+      "divergences": 0,
+      "first_divergence_iter": null,
+      "baseline_hash": "26086afb87b968492d9ac0fc017e69979a59b98f830c6df589bad62839ac78ed",
+      "elapsed_seconds": 178.7867
+    },
+    {
+      "label": "over_max_length",
+      "input_repr": "'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "status": "PASS",
+      "iterations": 10000,
+      "divergences": 0,
+      "first_divergence_iter": null,
+      "baseline_hash": "d49de985f70345db0350de00536d829d3aa40a75fb45d08c55406657ab7822e0",
+      "elapsed_seconds": 197.4488
+    },
+    {
+      "label": "empty_string",
+      "input_repr": "''",
+      "status": "PASS",
+      "iterations": 10000,
+      "divergences": 0,
+      "first_divergence_iter": null,
+      "baseline_hash": "feb091fb4a0b02672e685e2867b7a5e1e23a66b60202f4441a6542916f56ed26",
+      "elapsed_seconds": 0.1053
+    },
+    {
+      "label": "whitespace_only",
+      "input_repr": "'   \\t\\n   '",
+      "status": "PASS",
+      "iterations": 10000,
+      "divergences": 0,
+      "first_divergence_iter": null,
+      "baseline_hash": "feb091fb4a0b02672e685e2867b7a5e1e23a66b60202f4441a6542916f56ed26",
+      "elapsed_seconds": 0.1159
+    },
+    {
+      "label": "mixed_case_normalization",
+      "input_repr": "'SCAM KILL ATTACK'",
+      "status": "PASS",
+      "iterations": 10000,
+      "divergences": 0,
+      "first_divergence_iter": null,
+      "baseline_hash": "c2af2311fea46594ad699a8e8fd338721e4e83426c8f7e7fded406f24ac636b9",
+      "elapsed_seconds": 3.7135
+    },
+    {
+      "label": "unicode_content",
+      "input_repr": "'caf\u00e9 r\u00e9sum\u00e9 na\u00efve'",
+      "status": "PASS",
+      "iterations": 10000,
+      "divergences": 0,
+      "first_divergence_iter": null,
+      "baseline_hash": "f9dcf9d5fc37cb74baed6514fe679aaa239f66062a5e886db54516bba31e989f",
+      "elapsed_seconds": 3.5934
+    },
+    {
+      "label": "repeated_same_keyword",
+      "input_repr": "'kill kill kill kill kill kill kill kill kill kill kill kill kill kill kill kill",
+      "status": "PASS",
+      "iterations": 10000,
+      "divergences": 0,
+      "first_divergence_iter": null,
+      "baseline_hash": "6a8a4de6a7c3e53f4e62e41de4b09760f2bbe035ced6214189893f0f2950a339",
+      "elapsed_seconds": 9.3347
+    },
+    {
+      "label": "special_characters",
+      "input_repr": "'!@#$% ^&*() kill <script>'",
+      "status": "PASS",
+      "iterations": 10000,
+      "divergences": 0,
+      "first_divergence_iter": null,
+      "baseline_hash": "a4f1ac05e7f363f39a81c0848bd7fcd96a1955131ff2240d2cb2bdc442a2cb1b",
+      "elapsed_seconds": 4.5357
+    },
+    {
+      "label": "none_type",
+      "input_repr": "None",
+      "status": "PASS",
+      "iterations": 10000,
+      "divergences": 0,
+      "first_divergence_iter": null,
+      "baseline_hash": "7d15ebeaa44c2781a227c810e352b203e3d80c0f57d35ec558728fb9c6bf40c5",
+      "elapsed_seconds": 0.0998
+    },
+    {
+      "label": "integer_type",
+      "input_repr": "42",
+      "status": "PASS",
+      "iterations": 10000,
+      "divergences": 0,
+      "first_divergence_iter": null,
+      "baseline_hash": "7d15ebeaa44c2781a227c810e352b203e3d80c0f57d35ec558728fb9c6bf40c5",
+      "elapsed_seconds": 0.098
+    },
+    {
+      "label": "newlines_in_text",
+      "input_repr": "'kill\\nmurder\\nattack'",
+      "status": "PASS",
+      "iterations": 10000,
+      "divergences": 0,
+      "first_divergence_iter": null,
+      "baseline_hash": "59ec7f3280f54040974838dde1d708ae73e308ef4f3dc9d706636739a495fa27",
+      "elapsed_seconds": 3.7694
+    }
+  ]
+}
