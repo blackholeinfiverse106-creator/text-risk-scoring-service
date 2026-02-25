@@ -88,3 +88,4 @@ being artificially increased.
 
 This design prevents over-escalation and supports safe integration
 in decision pipelines.
+\.\.\.\.
