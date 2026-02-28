@@ -139,3 +139,4 @@ No database. No cache. No external calls. Fully self-contained.
 - No authentication or rate limiting (infra responsibility)
 - English only
 - Scores are not probabilities — do not use for automated enforcement
+-0-0-0-0-0
