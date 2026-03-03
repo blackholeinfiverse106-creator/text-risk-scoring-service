@@ -43,3 +43,6 @@
 ### Guarantees
 - **Immutability**: `safety_metadata` fields are non-negotiable and strictly enforced by the contract layer.
 - **Fail-Closed**: In case of violation, the system returns a structured error response with `risk_category: LOW`.
+
+
+\'\'\'\'\'
