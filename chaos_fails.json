@@ -1,0 +1,34 @@
+[
+  {
+    "entry_idx": 0,
+    "field": "risk_category",
+    "new_value": "HIGH",
+    "original_hash": "9f76eaf133018b4d\u2026",
+    "tampered_hash": "9f76eaf133018b4d\u2026",
+    "detected": false
+  },
+  {
+    "entry_idx": 1,
+    "field": "confidence_score",
+    "new_value": "1.0",
+    "original_hash": "c15e863c48f99540\u2026",
+    "tampered_hash": "c15e863c48f99540\u2026",
+    "detected": false
+  },
+  {
+    "entry_idx": 8,
+    "field": "confidence_score",
+    "new_value": "1.0",
+    "original_hash": "9ffcb934c8ab8d66\u2026",
+    "tampered_hash": "9ffcb934c8ab8d66\u2026",
+    "detected": false
+  },
+  {
+    "entry_idx": 9,
+    "field": "confidence_score",
+    "new_value": "1.0",
+    "original_hash": "01493b39a4128b65\u2026",
+    "tampered_hash": "01493b39a4128b65\u2026",
+    "detected": false
+  }
+]

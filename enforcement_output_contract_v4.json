@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://blackhole.local/text-risk-scoring/enforcement-v4",
+  "title": "Text Risk Scoring Service - Enforcement Output Contract v4",
+  "description": "JSON schema for the signals sent downstream to InsightBridge. Guarantees deterministic risk scoring, complete traceability, and absolute non-authority.",
+  "type": "object",
+  "required": [
+    "enforcement_signal_id",
+    "risk_score",
+    "bounded_confidence",
+    "contradiction_flag",
+    "abstention_flag",
+    "epistemic_source_hash",
+    "decision",
+    "authority"
+  ],
+  "properties": {
+    "enforcement_signal_id": {
+      "type": "string",
+      "description": "Unique, deterministic identifier for this enforcement signal computation.",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "risk_score": {
+      "type": "number",
+      "description": "The deterministically computed and bounded risk score.",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "bounded_confidence": {
+      "type": "number",
+      "description": "The deterministically clipped confidence score, downgraded under ambiguity or entropy.",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "contradiction_flag": {
+      "type": "boolean",
+      "description": "True if internal contradictions were detected in the upstream intelligence. Does not inflate the risk score."
+    },
+    "abstention_flag": {
+      "type": "boolean",
+      "description": "True if upstream uncertainty forced an epistemic abstention. If True, risk_score MUST be 0.0."
+    },
+    "epistemic_source_hash": {
+      "type": "string",
+      "description": "Unmodified passthrough hash of the intelligence material used to generate this assessment.",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "decision": {
+      "type": "null",
+      "description": "STRICT INVARIANT: The scoring service NEVER makes a decision downstream."
+    },
+    "authority": {
+      "type": "string",
+      "const": "NONE",
+      "description": "STRICT INVARIANT: The scoring service claims NO authority to act on this signal."
+    }
+  },
+  "additionalProperties": false
+}
