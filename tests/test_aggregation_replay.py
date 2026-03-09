@@ -24,7 +24,13 @@ from typing import List, Tuple
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from app.dgic_adapter import EpistemicState, DGICInput, build_evidence_hash
+from app.dgic_adapter import (
+    EpistemicState, 
+    DGICInput, 
+    DGICPayload,
+    build_evidence_hash, 
+    compute_envelope_hash
+)
 from app.enforcement_aggregator import (
     AggregatedSignal,
     ScoredSignal,
@@ -40,12 +46,25 @@ from app.enforcement_aggregator import (
 def _dgic(state: EpistemicState, entropy: float = 0.0,
           contradiction: bool = False, collapse: bool = False,
           seed: str = "default") -> DGICInput:
+    evidence = build_evidence_hash(f"{seed}:{state.value}:{entropy}")
+    payload = DGICPayload(
+        epistemic_state=state,
+        entropy_score=entropy,
+        contradiction_flag=contradiction
+    )
+    payload_dict = {
+        "epistemic_state": state.value if hasattr(state, "value") else state,
+        "entropy_score": entropy,
+        "contradiction_flag": contradiction
+    }
+    envelope_hash = compute_envelope_hash("schema_v1", evidence, payload_dict)
+    
     return DGICInput(
-        epistemic_state    = state,
-        entropy_score      = entropy,
-        contradiction_flag = contradiction,
+        version            = "schema_v1",
+        lineage_hash       = evidence,
+        envelope_hash      = envelope_hash,
+        payload            = payload,
         collapse_flag      = collapse,
-        evidence_hash      = build_evidence_hash(f"{seed}:{state.value}:{entropy}"),
     )
 
 

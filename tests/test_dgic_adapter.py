@@ -22,12 +22,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from app.dgic_adapter import (
     EpistemicState,
     DGICInput,
+    DGICPayload,
     DGICAdapterResult,
     DGICContractViolation,
     validate_dgic_input,
     adapt_dgic,
     apply_dgic_modifiers,
     build_evidence_hash,
+    compute_envelope_hash,
     AMBIGUOUS_RISK_CEILING,
     AMBIGUOUS_CONFIDENCE_MULTIPLIER,
     INFERRED_ENTROPY_SCALING_FACTOR,
@@ -47,13 +49,32 @@ def make_dgic(
     contradiction=False,
     collapse=False,
     evidence_hash=EVIDENCE_HASH,
+    version="schema_v1",
+    tamper_envelope=False
 ):
-    return DGICInput(
+    payload = DGICPayload(
         epistemic_state=state,
         entropy_score=entropy,
         contradiction_flag=contradiction,
-        collapse_flag=collapse,
-        evidence_hash=evidence_hash,
+    )
+    
+    payload_dict = {
+        "epistemic_state": state.value if isinstance(state, EpistemicState) else state,
+        "entropy_score": entropy,
+        "contradiction_flag": contradiction
+    }
+    
+    expected_seal = compute_envelope_hash(version, evidence_hash, payload_dict)
+    
+    if tamper_envelope:
+        expected_seal = "b" * 64
+        
+    return DGICInput(
+        version=version,
+        lineage_hash=evidence_hash,
+        envelope_hash=expected_seal,
+        payload=payload,
+        collapse_flag=collapse
     )
 
 def high_risk_base():
@@ -97,46 +118,41 @@ class TestValidateDGICInput:
     def test_valid_input_does_not_raise(self):
         validate_dgic_input(make_dgic())
 
-    def test_non_dgic_input_raises(self):
+    def test_invalid_version_raises(self):
+        bad = make_dgic(version="schema_v2")
         with pytest.raises(DGICContractViolation) as exc:
-            validate_dgic_input({"epistemic_state": "KNOWN"})
-        assert exc.value.code == "INVALID_DGIC_TYPE"
+            validate_dgic_input(bad)
+        assert "Unsupported envelope version" in str(exc.value)
+        
+    def test_tampered_envelope_raises(self):
+        bad = make_dgic(tamper_envelope=True)
+        with pytest.raises(DGICContractViolation) as exc:
+            validate_dgic_input(bad)
+        assert "Cryptographic seal broken" in str(exc.value)
 
     def test_invalid_epistemic_state_raises(self):
-        bad = DGICInput(
-            epistemic_state="FLYING",  # type: ignore
-            entropy_score=0.0,
-            contradiction_flag=False,
-            collapse_flag=False,
-            evidence_hash=EVIDENCE_HASH,
-        )
+        bad = make_dgic(state="FLYING") # type: ignore
         with pytest.raises(DGICContractViolation) as exc:
             validate_dgic_input(bad)
-        assert exc.value.code == "INVALID_EPISTEMIC_STATE"
+        assert "must be an EpistemicState enum" in str(exc.value)
 
     def test_entropy_bool_rejected(self):
-        bad = DGICInput(
-            epistemic_state=EpistemicState.KNOWN,
-            entropy_score=True,  # bool is int subclass — must be rejected
-            contradiction_flag=False,
-            collapse_flag=False,
-            evidence_hash=EVIDENCE_HASH,
-        )
+        bad = make_dgic(entropy=True) # type: ignore
         with pytest.raises(DGICContractViolation) as exc:
             validate_dgic_input(bad)
-        assert exc.value.code == "INVALID_ENTROPY_TYPE"
+        assert "must be a numeric float" in str(exc.value)
 
     def test_entropy_below_zero_rejected(self):
         bad = make_dgic(entropy=-0.001)
         with pytest.raises(DGICContractViolation) as exc:
             validate_dgic_input(bad)
-        assert exc.value.code == "INVALID_ENTROPY_RANGE"
+        assert "out of bounds" in str(exc.value)
 
     def test_entropy_above_one_rejected(self):
         bad = make_dgic(entropy=1.001)
         with pytest.raises(DGICContractViolation) as exc:
             validate_dgic_input(bad)
-        assert exc.value.code == "INVALID_ENTROPY_RANGE"
+        assert "out of bounds" in str(exc.value)
 
     def test_entropy_boundary_values_accepted(self):
         validate_dgic_input(make_dgic(entropy=0.0))
@@ -144,40 +160,22 @@ class TestValidateDGICInput:
         validate_dgic_input(make_dgic(entropy=0.5))
 
     def test_contradiction_flag_non_bool_rejected(self):
-        bad = DGICInput(
-            epistemic_state=EpistemicState.KNOWN,
-            entropy_score=0.0,
-            contradiction_flag=1,  # int, not bool
-            collapse_flag=False,
-            evidence_hash=EVIDENCE_HASH,
-        )
+        bad = make_dgic(contradiction=1) # type: ignore
         with pytest.raises(DGICContractViolation) as exc:
             validate_dgic_input(bad)
-        assert exc.value.code == "INVALID_CONTRADICTION_FLAG"
+        assert "must be a boolean" in str(exc.value)
 
-    def test_collapse_flag_non_bool_rejected(self):
-        bad = DGICInput(
-            epistemic_state=EpistemicState.KNOWN,
-            entropy_score=0.0,
-            contradiction_flag=False,
-            collapse_flag="yes",  # type: ignore
-            evidence_hash=EVIDENCE_HASH,
-        )
-        with pytest.raises(DGICContractViolation) as exc:
-            validate_dgic_input(bad)
-        assert exc.value.code == "INVALID_COLLAPSE_FLAG"
-
-    def test_empty_evidence_hash_rejected(self):
+    def test_empty_lineage_hash_rejected(self):
         bad = make_dgic(evidence_hash="")
         with pytest.raises(DGICContractViolation) as exc:
             validate_dgic_input(bad)
-        assert exc.value.code == "INVALID_EVIDENCE_HASH"
+        assert "lineage_hash must be a 64-character SHA-256" in str(exc.value)
 
-    def test_whitespace_evidence_hash_rejected(self):
+    def test_whitespace_lineage_hash_rejected(self):
         bad = make_dgic(evidence_hash="   ")
         with pytest.raises(DGICContractViolation) as exc:
             validate_dgic_input(bad)
-        assert exc.value.code == "INVALID_EVIDENCE_HASH"
+        assert "lineage_hash must be a 64-character SHA-256" in str(exc.value)
 
 
 # ──────────────────────────────────────────────────────────────

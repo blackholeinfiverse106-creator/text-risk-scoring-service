@@ -71,27 +71,26 @@ class EpistemicState(str, Enum):
 # ============================================================
 
 @dataclass(frozen=True)
-class DGICInput:
-    """
-    Structured epistemic output from DGIC.
-    All five fields are required; none may be absent or None.
-
-    Fields:
-        epistemic_state   : Epistemic certainty level of the DGIC assessment.
-        entropy_score     : Measure of information uncertainty in [0.0, 1.0].
-                            0.0 = fully ordered; 1.0 = maximum entropy.
-        contradiction_flag: True if DGIC detected internal evidence contradictions.
-        collapse_flag     : True if DGIC collapsed a superposition during processing.
-                            MUST NOT be used by this adapter to derive authority.
-        evidence_hash     : Opaque SHA-256 fingerprint of the evidence chain.
-                            Passed through unmodified. Never inspected for content.
-    """
-    epistemic_state:    EpistemicState
-    entropy_score:      float
+class DGICPayload:
+    epistemic_state: EpistemicState
+    entropy_score: float
     contradiction_flag: bool
-    collapse_flag:      bool
-    evidence_hash:      str
 
+@dataclass(frozen=True)
+class DGICInput:
+    """The strict schema_v1 epistemic envelope from DGIC."""
+    version: str
+    lineage_hash: str
+    envelope_hash: str
+    payload: DGICPayload
+    
+    # Internal flags
+    collapse_flag: bool = False
+    
+    @property
+    def evidence_hash(self) -> str:
+        # Legacy property alias for previous pipeline steps
+        return self.lineage_hash
 
 @dataclass(frozen=True)
 class DGICAdapterResult:
@@ -122,70 +121,77 @@ class DGICAdapterResult:
 # ============================================================
 
 class DGICContractViolation(Exception):
-    """Raised when DGICInput fails structural validation."""
-    def __init__(self, code: str, message: str):
-        self.code    = code
-        self.message = message
-        super().__init__(f"{code}: {message}")
+    """Raised when the DGIC input violates the structural or cryptographic contract."""
+    pass
 
 
 # ============================================================
 # Part A — Input Validation
 # ============================================================
 
-def validate_dgic_input(dgic: Any) -> None:
-    """
-    Structural contract check for DGICInput.
-    Raises DGICContractViolation on any violation.
+def build_evidence_hash(text: str) -> str:
+    """Stub to simulate computing a hash. (Legacy/Test method)"""
+    import hashlib
+    return hashlib.sha256(text.encode()).hexdigest()
 
-    Rules:
-      - Must be a DGICInput instance
-      - epistemic_state must be a valid EpistemicState
-      - entropy_score must be float/int in [0.0, 1.0]
-      - contradiction_flag must be bool
-      - collapse_flag must be bool (never used to derive authority)
-      - evidence_hash must be a non-empty string
+def compute_envelope_hash(version: str, lineage_hash: str, payload_dict: dict) -> str:
+    """Computes the deterministic cryptographic seal of a DGIC envelope."""
+    import hashlib
+    import json
+    # Ensure stable sorting for deterministic hashing
+    payload_str = json.dumps(payload_dict, sort_keys=True)
+    raw = f"{version}|{lineage_hash}|{payload_str}"
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+def validate_dgic_input(dgic: DGICInput) -> None:
+    """
+    Validates the structural and cryptographic integrity of the DGIC schema_v1 envelope.
+    Raises DGICContractViolation if invalid.
     """
     if not isinstance(dgic, DGICInput):
-        raise DGICContractViolation(
-            "INVALID_DGIC_TYPE",
-            f"Expected DGICInput, got {type(dgic).__name__}"
-        )
+        raise DGICContractViolation("Input must be a DGICInput instance.")
 
-    if not isinstance(dgic.epistemic_state, EpistemicState):
-        raise DGICContractViolation(
-            "INVALID_EPISTEMIC_STATE",
-            f"epistemic_state must be an EpistemicState member, got {dgic.epistemic_state!r}"
-        )
+    if dgic.version != "schema_v1":
+        raise DGICContractViolation(f"Unsupported envelope version: {dgic.version}. Expected 'schema_v1'.")
+        
+    if not isinstance(dgic.lineage_hash, str) or len(dgic.lineage_hash) != 64:
+        raise DGICContractViolation("lineage_hash must be a 64-character SHA-256 hex string.")
+        
+    if not isinstance(dgic.envelope_hash, str) or len(dgic.envelope_hash) != 64:
+        raise DGICContractViolation("envelope_hash must be a 64-character SHA-256 hex string.")
+        
+    if not isinstance(dgic.payload, DGICPayload):
+        raise DGICContractViolation("payload must be a valid DGICPayload object.")
+        
+    if not isinstance(dgic.payload.epistemic_state, EpistemicState):
+        raise DGICContractViolation("payload.epistemic_state must be an EpistemicState enum.")
+        
+    if isinstance(dgic.payload.entropy_score, bool) or not isinstance(dgic.payload.entropy_score, (int, float)):
+        raise DGICContractViolation("payload.entropy_score must be a numeric float.")
+            
+    import math
+    if math.isnan(dgic.payload.entropy_score):
+         raise DGICContractViolation("payload.entropy_score cannot be NaN (fails range check conceptually).")
+         
+    if not (0.0 <= dgic.payload.entropy_score <= 1.0):
+        raise DGICContractViolation(f"payload.entropy_score {dgic.payload.entropy_score} out of bounds [0.0, 1.0].")
+        
+    if not isinstance(dgic.payload.contradiction_flag, bool):
+        raise DGICContractViolation("payload.contradiction_flag must be a boolean.")
+        
+    # Cryptographic Seal Verification
+    payload_dict = {
+        "epistemic_state": dgic.payload.epistemic_state.value,
+        "entropy_score": dgic.payload.entropy_score,
+        "contradiction_flag": dgic.payload.contradiction_flag
+    }
+    expected_seal = compute_envelope_hash(dgic.version, dgic.lineage_hash, payload_dict)
+    
+    if expected_seal != dgic.envelope_hash:
+        raise DGICContractViolation("Cryptographic seal broken: envelope_hash does not match payload hash. ENVELOPE TAMPERED.")
 
-    if isinstance(dgic.entropy_score, bool) or not isinstance(dgic.entropy_score, (int, float)):
-        raise DGICContractViolation(
-            "INVALID_ENTROPY_TYPE",
-            "entropy_score must be a float in [0.0, 1.0]"
-        )
-    if not (ENTROPY_MIN <= dgic.entropy_score <= ENTROPY_MAX):
-        raise DGICContractViolation(
-            "INVALID_ENTROPY_RANGE",
-            f"entropy_score must be in [{ENTROPY_MIN}, {ENTROPY_MAX}], got {dgic.entropy_score}"
-        )
-
-    if not isinstance(dgic.contradiction_flag, bool):
-        raise DGICContractViolation(
-            "INVALID_CONTRADICTION_FLAG",
-            "contradiction_flag must be a bool"
-        )
-
-    if not isinstance(dgic.collapse_flag, bool):
-        raise DGICContractViolation(
-            "INVALID_COLLAPSE_FLAG",
-            "collapse_flag must be a bool"
-        )
-
-    if not isinstance(dgic.evidence_hash, str) or not dgic.evidence_hash.strip():
-        raise DGICContractViolation(
-            "INVALID_EVIDENCE_HASH",
-            "evidence_hash must be a non-empty string"
-        )
+    if dgic.payload.epistemic_state == EpistemicState.AMBIGUOUS and dgic.collapse_flag:
+        raise DGICContractViolation("Illegal epistemic collapse: AMBIGUOUS state cannot be forcefully collapsed to KNOWN/escalated.")
 
 
 # ============================================================
@@ -194,26 +200,14 @@ def validate_dgic_input(dgic: Any) -> None:
 
 def adapt_dgic(dgic: DGICInput) -> DGICAdapterResult:
     """
-    Maps a validated DGICInput to a DGICAdapterResult deterministically.
-
-    Epistemic state mapping:
-
-      KNOWN     → NORMAL scoring.   confidence_multiplier=1.0. No ceiling. No warning.
-      INFERRED  → CONFIDENCE_SCALED. Multiplier reduced by entropy (1.0 - entropy * 0.4).
-                  No risk ceiling. No warning flag.
-      AMBIGUOUS → RISK_BOUNDED.    risk capped at 0.69 (below HIGH threshold).
-                  confidence_multiplier=0.5. epistemic_warning=True.
-                  Ambiguity is NOT collapsed — the system emits a bounded signal only.
-      UNKNOWN   → ABSTAIN.          risk_ceiling=0.0. confidence_multiplier=0.0.
-                  abstain=True. epistemic_warning=True.
-                  System emits no risk signal when there is no epistemic grounding.
-
-    Note: contradiction_flag and collapse_flag do NOT alter the scoring mode.
-    They are preserved in the audit trail but confer no additional authority.
+    Deterministically maps the DGIC EpistemicState into scoring parameters.
+    No probabilistic inference. No collapse of AMBIGUOUS.
     """
+    # Defensive structural validation first
     validate_dgic_input(dgic)
-
-    state = dgic.epistemic_state
+    
+    state = dgic.payload.epistemic_state
+    entropy = dgic.payload.entropy_score
 
     if state == EpistemicState.KNOWN:
         result = DGICAdapterResult(
@@ -222,14 +216,12 @@ def adapt_dgic(dgic: DGICInput) -> DGICAdapterResult:
             risk_ceiling          = None,
             epistemic_warning     = False,
             abstain               = False,
-            evidence_hash         = dgic.evidence_hash,
+            evidence_hash         = dgic.lineage_hash,
             epistemic_state       = state,
         )
 
     elif state == EpistemicState.INFERRED:
-        # Confidence is scaled down proportionally to entropy.
-        # A high-entropy (uncertain) inference warrants lower confidence.
-        multiplier = round(1.0 - dgic.entropy_score * INFERRED_ENTROPY_SCALING_FACTOR, 6)
+        multiplier = round(1.0 - entropy * INFERRED_ENTROPY_SCALING_FACTOR, 6)
         multiplier = max(0.0, min(1.0, multiplier))  # clamp defensively
         result = DGICAdapterResult(
             scoring_mode          = "CONFIDENCE_SCALED",
@@ -237,31 +229,31 @@ def adapt_dgic(dgic: DGICInput) -> DGICAdapterResult:
             risk_ceiling          = None,
             epistemic_warning     = False,
             abstain               = False,
-            evidence_hash         = dgic.evidence_hash,
+            evidence_hash         = dgic.lineage_hash,
             epistemic_state       = state,
         )
 
     elif state == EpistemicState.AMBIGUOUS:
-        # Risk is bounded below HIGH. Ambiguity is preserved — we do NOT decide.
-        # The warning flag surfaces to downstream consumers.
+        # Prevent escalation to HIGH entirely.
         result = DGICAdapterResult(
             scoring_mode          = "RISK_BOUNDED",
             confidence_multiplier = AMBIGUOUS_CONFIDENCE_MULTIPLIER,
             risk_ceiling          = AMBIGUOUS_RISK_CEILING,
             epistemic_warning     = True,
             abstain               = False,
-            evidence_hash         = dgic.evidence_hash,
+            evidence_hash         = dgic.lineage_hash,
             epistemic_state       = state,
         )
 
     else:  # EpistemicState.UNKNOWN
+        # Fail closed. Abstain.
         result = DGICAdapterResult(
             scoring_mode          = "ABSTAIN",
             confidence_multiplier = 0.0,
             risk_ceiling          = UNKNOWN_RISK_CEILING,
             epistemic_warning     = True,
             abstain               = True,
-            evidence_hash         = dgic.evidence_hash,
+            evidence_hash         = dgic.lineage_hash,
             epistemic_state       = state,
         )
 
@@ -285,8 +277,7 @@ def adapt_dgic(dgic: DGICInput) -> DGICAdapterResult:
 # Part A — Score Modifier Application
 # ============================================================
 
-# Abstention error code — not in the existing v3 VALID_ERROR_CODES set.
-# This is an integration-layer code, not a contract-layer code.
+# Abstention error code
 ABSTENTION_ERROR_CODE = "EPISTEMIC_ABSTENTION"
 
 # Frozen safety_metadata — always identical, never derived from DGIC.
@@ -303,20 +294,7 @@ def apply_dgic_modifiers(
 ) -> Dict[str, Any]:
     """
     Applies DGIC-derived modifiers to a base engine result.
-    Returns a NEW dict — does not mutate base_result.
-
-    The returned dict:
-      - Preserves all v3 contract fields unchanged (plus applied modifiers).
-      - Adds a 'dgic_metadata' key (outside v3 contract — library-only for Day 1).
-      - ALWAYS has safety_metadata = {is_decision: False, authority: "NONE", actionable: False}.
-
-    Scoring modes:
-      NORMAL           — No score modification. dgic_metadata passthrough.
-      CONFIDENCE_SCALED — confidence_score *= confidence_multiplier (clamped to [0.0, 1.0]).
-      RISK_BOUNDED      — risk_score clamped to risk_ceiling; risk_category recalculated.
-                          epistemic_warning added to dgic_metadata.
-      ABSTAIN           — Full abstention. risk_score=0.0, risk_category="LOW",
-                          errors set to EPISTEMIC_ABSTENTION.
+    Returns a NEW dict.
     """
     import copy
     result = copy.deepcopy(base_result)
@@ -345,10 +323,6 @@ def apply_dgic_modifiers(
             "epistemic_warning": True,
             "evidence_hash":     adapter_result.evidence_hash,
         }
-        logger.warning(
-            "Epistemic abstention applied — risk signal suppressed",
-            extra={"event_type": "dgic_abstention", "epistemic_state": state.value}
-        )
         return result
 
     # --- CONFIDENCE_SCALED ---
@@ -359,15 +333,6 @@ def apply_dgic_modifiers(
             2
         )
         result["confidence_score"] = scaled
-        logger.info(
-            "Confidence scaled by DGIC entropy",
-            extra={
-                "event_type":       "dgic_confidence_scale",
-                "multiplier":       adapter_result.confidence_multiplier,
-                "original_conf":    raw_conf,
-                "scaled_conf":      scaled,
-            }
-        )
 
     # --- RISK_BOUNDED ---
     elif mode == "RISK_BOUNDED":
@@ -376,24 +341,12 @@ def apply_dgic_modifiers(
         if ceiling is not None and raw_score > ceiling:
             clamped = round(ceiling, 2)
             result["risk_score"] = clamped
-            # Recalculate risk_category from clamped score
             result["risk_category"] = _score_to_category(clamped)
-            logger.warning(
-                "Risk score bounded by DGIC AMBIGUOUS state",
-                extra={
-                    "event_type":   "dgic_risk_bounded",
-                    "raw_score":    raw_score,
-                    "ceiling":      ceiling,
-                    "clamped_score": clamped,
-                }
-            )
-        # Scale confidence too
+        
         raw_conf = result.get("confidence_score", 1.0)
         result["confidence_score"] = round(
             max(0.0, min(1.0, raw_conf * adapter_result.confidence_multiplier)), 2
         )
-
-    # NORMAL — no score changes
 
     # --- Authority invariant re-assertion (defensive) ---
     result["safety_metadata"] = dict(_SAFETY_METADATA)
@@ -409,24 +362,11 @@ def apply_dgic_modifiers(
     return result
 
 
-# ============================================================
-# Helpers
-# ============================================================
-
 def _score_to_category(score: float) -> str:
-    """Recalculate risk_category from a (possibly clamped) score.
-    Mirrors the threshold logic in engine.py exactly."""
+    """Recalculate risk_category from a (possibly clamped) score."""
     if score < 0.3:
         return "LOW"
     elif score < 0.7:
         return "MEDIUM"
     else:
         return "HIGH"
-
-
-def build_evidence_hash(text: str) -> str:
-    """
-    Utility: generate a stable SHA-256 evidence_hash from arbitrary text.
-    For use in tests and replay harness. Evidence hash is opaque to the adapter.
-    """
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()

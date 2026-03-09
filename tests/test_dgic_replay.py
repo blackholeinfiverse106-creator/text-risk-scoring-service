@@ -23,9 +23,11 @@ from app.engine import analyze_text
 from app.dgic_adapter import (
     EpistemicState,
     DGICInput,
+    DGICPayload,
     adapt_dgic,
     apply_dgic_modifiers,
     build_evidence_hash,
+    compute_envelope_hash,
 )
 
 # ──────────────────────────────────────────────────────────────
@@ -87,12 +89,23 @@ def run_replay() -> dict:
 
     for label, text, state, entropy, contradiction, collapse in REPLAY_CORPUS:
         evidence = build_evidence_hash(f"{label}:{text}")
-        dgic = DGICInput(
+        payload = DGICPayload(
             epistemic_state    = state,
             entropy_score      = entropy,
             contradiction_flag = contradiction,
+        )
+        payload_dict = {
+            "epistemic_state": state.value if hasattr(state, "value") else state,
+            "entropy_score": entropy,
+            "contradiction_flag": contradiction
+        }
+        envelope_hash = compute_envelope_hash("schema_v1", evidence, payload_dict)
+        dgic = DGICInput(
+            version            = "schema_v1",
+            lineage_hash       = evidence,
+            envelope_hash      = envelope_hash,
+            payload            = payload,
             collapse_flag      = collapse,
-            evidence_hash      = evidence,
         )
 
         # Baseline
@@ -252,12 +265,23 @@ def test_replay_all_safety_metadata_invariant():
 
     for label, text, state, entropy, contradiction, collapse in REPLAY_CORPUS:
         evidence = build_evidence_hash(f"{label}:{text}")
-        dgic = DGICInput(
+        payload = DGICPayload(
             epistemic_state    = state,
             entropy_score      = entropy,
             contradiction_flag = contradiction,
+        )
+        payload_dict = {
+            "epistemic_state": state.value if hasattr(state, "value") else state,
+            "entropy_score": entropy,
+            "contradiction_flag": contradiction
+        }
+        envelope_hash = compute_envelope_hash("schema_v1", evidence, payload_dict)
+        dgic = DGICInput(
+            version            = "schema_v1",
+            lineage_hash       = evidence,
+            envelope_hash      = envelope_hash,
+            payload            = payload,
             collapse_flag      = collapse,
-            evidence_hash      = evidence,
         )
         result = run_integrated_call(text, dgic)
         assert result["safety_metadata"] == expected_sm, (

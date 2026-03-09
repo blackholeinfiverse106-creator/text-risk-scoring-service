@@ -256,7 +256,7 @@ def _score_single_signal(
         scoring_mode       = adapter_result.scoring_mode,
         abstained          = abstained,
         epistemic_warning  = adapter_result.epistemic_warning,
-        contradiction_flag = dgic.contradiction_flag,
+        contradiction_flag = dgic.payload.contradiction_flag,
         evidence_hash      = adapter_result.evidence_hash,
     )
 
@@ -273,9 +273,9 @@ def _compute_aggregation_hash(signals: List[Tuple[str, DGICInput]]) -> str:
     fingerprint = [
         {
             "text":              text,
-            "epistemic_state":   dgic.epistemic_state.value,
-            "entropy_score":     dgic.entropy_score,
-            "contradiction_flag":dgic.contradiction_flag,
+            "epistemic_state":   dgic.payload.epistemic_state.value,
+            "entropy_score":     dgic.payload.entropy_score,
+            "contradiction_flag":dgic.payload.contradiction_flag,
             "collapse_flag":     dgic.collapse_flag,
             "evidence_hash":     dgic.evidence_hash,
         }
