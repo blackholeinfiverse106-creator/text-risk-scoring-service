@@ -20,7 +20,7 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_ROOT)
 
 from app.engine import analyze_text
-from app.dgic_adapter import EpistemicState, DGICInput, build_evidence_hash
+from app.dgic_adapter import EpistemicState, DGICInput, build_evidence_hash, compute_envelope_hash, DGICPayload
 from app.enforcement_aggregator import aggregate_signals
 
 # ──────────────────────────────────────────────────────────────
@@ -81,12 +81,21 @@ class InsightBridgeMock:
 
 def produce_v4_payload(text: str, state: EpistemicState, entropy: float, contra: bool) -> dict:
     """Helper to run the aggregator and format its output into isolated V4 format."""
+    evidence = build_evidence_hash(f"{text}:{state.value}")
+    payload_obj = DGICPayload(epistemic_state=state, entropy_score=entropy, contradiction_flag=contra)
+    payload_dict = {
+        "epistemic_state": state.value,
+        "entropy_score": entropy,
+        "contradiction_flag": contra
+    }
+    env_hash = compute_envelope_hash("schema_v1", evidence, payload_dict)
+    
     dgic = DGICInput(
-        epistemic_state=state,
-        entropy_score=entropy,
-        contradiction_flag=contra,
-        collapse_flag=False,
-        evidence_hash=build_evidence_hash(f"{text}:{state.value}")
+        version="schema_v1",
+        lineage_hash=evidence,
+        envelope_hash=env_hash,
+        payload=payload_obj,
+        collapse_flag=False
     )
     # Use the Day 2 aggregator to get the deterministic result
     agg = aggregate_signals([(text, dgic)])
