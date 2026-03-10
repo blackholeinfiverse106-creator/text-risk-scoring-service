@@ -454,7 +454,12 @@ def aggregate_signals(
 
     active_scores  = [s.risk_score        for s in active]
     active_weights = [s.confidence_score  for s in active]
-    raw_aggregate  = _weighted_mean(active_scores, active_weights)
+    
+    # Handle the edge case where the active list effectively evaluates to 0
+    if not active_scores:
+        raw_aggregate = 0.0
+    else:
+        raw_aggregate  = _weighted_mean(active_scores, active_weights)
 
     # ── Step 6: Contradiction penalty ─────────────────────────────────────
     penalised, penalty_factor = _apply_contradiction_penalty(
