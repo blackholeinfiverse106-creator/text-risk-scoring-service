@@ -6,11 +6,11 @@
   "type": "object",
   "required": [
     "enforcement_signal_id",
-    "risk_score",
+    "aggregated_risk_score",
     "bounded_confidence",
     "contradiction_flag",
     "abstention_flag",
-    "epistemic_source_hash",
+    "epistemic_source_hash_chain",
     "decision",
     "authority"
   ],
@@ -20,9 +20,9 @@
       "description": "Unique, deterministic identifier for this enforcement signal computation.",
       "pattern": "^[a-f0-9]{64}$"
     },
-    "risk_score": {
+    "aggregated_risk_score": {
       "type": "number",
-      "description": "The deterministically computed and bounded risk score.",
+      "description": "The deterministically computed and bounded aggregated risk score.",
       "minimum": 0.0,
       "maximum": 1.0
     },
@@ -40,9 +40,9 @@
       "type": "boolean",
       "description": "True if upstream uncertainty forced an epistemic abstention. If True, risk_score MUST be 0.0."
     },
-    "epistemic_source_hash": {
+    "epistemic_source_hash_chain": {
       "type": "string",
-      "description": "Unmodified passthrough hash of the intelligence material used to generate this assessment.",
+      "description": "Unmodified passthrough lineage hash of the intelligence material.",
       "pattern": "^[a-f0-9]{64}$"
     },
     "decision": {

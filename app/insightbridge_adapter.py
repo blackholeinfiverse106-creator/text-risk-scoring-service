@@ -54,8 +54,8 @@ def map_to_insightbridge_contract(internal_result: Any, lineage_hash: str) -> Di
     
     output = {
         "enforcement_signal_id": signal_id,
-        "epistemic_source_hash": lineage_hash,
-        "risk_score": float(risk_score),
+        "epistemic_source_hash_chain": lineage_hash,
+        "aggregated_risk_score": float(risk_score),
         "bounded_confidence": float(confidence),
         "contradiction_flag": contradiction_flag,
         "abstention_flag": abstain_flag,

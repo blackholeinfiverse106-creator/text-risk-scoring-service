@@ -54,9 +54,9 @@ class InsightBridgeMock:
             return log
 
         # 2. Strict Invariant Checks (Redundant for abstention)
-        if payload.get("abstention_flag") is True and payload.get("risk_score") != 0.0:
+        if payload.get("abstention_flag") is True and payload.get("aggregated_risk_score") != 0.0:
             self.rejected_invariant += 1
-            log = "REJECTED (Invariant): abstained but risk_score != 0.0!"
+            log = "REJECTED (Invariant): abstained but aggregated_risk_score != 0.0!"
             self.logs.append({"payload": payload, "action": log})
             return log
 
@@ -66,7 +66,7 @@ class InsightBridgeMock:
         if payload.get("abstention_flag"):
             self.abstentions += 1
             action = "PASS (Upstream Abstained -> InsightBridge Fail-Open Fallback)"
-        elif payload.get("risk_score", 0.0) >= 0.7:
+        elif payload.get("aggregated_risk_score", 0.0) >= 0.7:
             if payload.get("bounded_confidence", 0.0) > 0.8:
                 self.actions_taken += 1
                 action = "BLOCK (High Risk, High Confidence -> Downstream Enforcement)"
@@ -102,11 +102,11 @@ def produce_v4_payload(text: str, state: EpistemicState, entropy: float, contra:
     
     return {
         "enforcement_signal_id": agg.aggregation_hash,
-        "risk_score": agg.aggregate_risk_score,
+        "aggregated_risk_score": agg.aggregate_risk_score,
         "bounded_confidence": agg.aggregate_confidence,
         "contradiction_flag": agg.contradiction_count > 0,
         "abstention_flag": agg.all_abstained,
-        "epistemic_source_hash": dgic.evidence_hash,
+        "epistemic_source_hash_chain": dgic.evidence_hash,
         "decision": None,
         "authority": "NONE"
     }
@@ -150,7 +150,7 @@ def run_simulation() -> dict:
     
     # Inject missing-field payload
     bad_payload3 = produce_v4_payload("safe", EpistemicState.KNOWN, 0.0, False)
-    bad_payload3.pop("epistemic_source_hash", None) # MISSING
+    bad_payload3.pop("epistemic_source_hash_chain", None) # MISSING
     res = mock.consume(bad_payload3)
     print(f"  [bad_schema     ] -> {res}")
 
@@ -173,7 +173,7 @@ def emit_report(stats: dict):
     log_rows = ""
     for entry in stats["logs"]:
         sig_id = entry["payload"].get("enforcement_signal_id", "N/A")[:16] + "..." 
-        rs = entry["payload"].get("risk_score", "N/A")
+        rs = entry["payload"].get("aggregated_risk_score", "N/A")
         bc = entry["payload"].get("bounded_confidence", "N/A")
         action = entry["action"]
         log_rows += f"| `{sig_id}` | `{rs}` | `{bc}` | {action} |\n"
