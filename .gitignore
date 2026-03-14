@@ -1,0 +1,35 @@
+# Environments
+venv/
+env/
+.env
+.venv/
+
+# Python Runtime
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Packages
+site-packages/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing / Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor
+.vscode/
+.idea/
+*.swp
