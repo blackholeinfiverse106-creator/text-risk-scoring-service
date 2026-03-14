@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Dict, Any
 
 class InputSchema(BaseModel):
     text: str
@@ -21,3 +21,10 @@ class OutputSchema(BaseModel):
     processed_length: int
     safety_metadata: SafetyMetadata
     errors: Optional[ErrorSchema] = None
+
+class DGICIngestRequest(BaseModel):
+    text: str
+    dgic_envelope: Dict[str, Any]
+
+class AggregateRequest(BaseModel):
+    signals: List[DGICIngestRequest]

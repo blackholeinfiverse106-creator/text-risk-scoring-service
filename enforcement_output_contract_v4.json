@@ -5,17 +5,19 @@
   "description": "JSON schema for the signals sent downstream to InsightBridge. Guarantees deterministic risk scoring, complete traceability, and absolute non-authority.",
   "type": "object",
   "required": [
-    "enforcement_signal_id",
+    "signal_id",
+    "source_type",
+    "signal_timestamp",
     "aggregated_risk_score",
-    "bounded_confidence",
+    "epistemic_confidence",
     "contradiction_flag",
     "abstention_flag",
-    "epistemic_source_hash_chain",
+    "lineage_reference",
     "decision",
     "authority"
   ],
   "properties": {
-    "enforcement_signal_id": {
+    "signal_id": {
       "type": "string",
       "description": "Unique, deterministic identifier for this enforcement signal computation.",
       "pattern": "^[a-f0-9]{64}$"
@@ -26,7 +28,17 @@
       "minimum": 0.0,
       "maximum": 1.0
     },
-    "bounded_confidence": {
+    "source_type": {
+      "type": "string",
+      "description": "Canonical source type identifier.",
+      "enum": ["text_risk_scoring_service"]
+    },
+    "signal_timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of signal generation."
+    },
+    "epistemic_confidence": {
       "type": "number",
       "description": "The deterministically clipped confidence score, downgraded under ambiguity or entropy.",
       "minimum": 0.0,
@@ -40,7 +52,7 @@
       "type": "boolean",
       "description": "True if upstream uncertainty forced an epistemic abstention. If True, risk_score MUST be 0.0."
     },
-    "epistemic_source_hash_chain": {
+    "lineage_reference": {
       "type": "string",
       "description": "Unmodified passthrough lineage hash of the intelligence material.",
       "pattern": "^[a-f0-9]{64}$"

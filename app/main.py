@@ -1,9 +1,12 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from app.schemas import InputSchema, OutputSchema
+from app.schemas import InputSchema, OutputSchema, DGICIngestRequest, AggregateRequest
 from app.engine import analyze_text
 from app.contract_enforcement import validate_input_contract, validate_output_contract, ContractViolation
+from app.dgic_adapter import validate_dgic_input, apply_epistemic_modifiers, DGICContractViolation
+from app.enforcement_aggregator import aggregate_signals
+from app.insightbridge_adapter import map_to_insightbridge_contract
 import logging
 import uuid
 from app.observability import setup_json_logging
@@ -78,3 +81,41 @@ def analyze(payload: InputSchema):
                 "message": "Unexpected system error"
             }
         }
+
+@app.post("/api/v1/dgic/ingest")
+def dgic_ingest(payload: DGICIngestRequest):
+    correlation_id = str(uuid.uuid4())[:8]
+    logger.info("DGIC envelope received", extra={"correlation_id": correlation_id, "event_type": "dgic_ingest"})
+    try:
+        dgic_input = validate_dgic_input(payload.dgic_envelope)
+        base_result = analyze_text(payload.text, correlation_id=correlation_id)
+        final_result = apply_epistemic_modifiers(base_result, dgic_input)
+        return final_result
+    except DGICContractViolation as e:
+        logger.warning(f"DGIC Contract violation | code={e.code}", extra={"correlation_id": correlation_id, "details": {"why": e.message}})
+        return {"error": e.message, "error_code": e.code}
+
+@app.post("/api/v1/aggregate")
+def aggregate_endpoint(payload: AggregateRequest):
+    correlation_id = str(uuid.uuid4())[:8]
+    logger.info("Aggregation request received", extra={"correlation_id": correlation_id, "event_type": "aggregation"})
+    try:
+        if not payload.signals:
+            return {"error": "No signals provided"}
+            
+        signals = []
+        for p in payload.signals:
+            dgic_input = validate_dgic_input(p.dgic_envelope)
+            signals.append((p.text, dgic_input))
+            
+        agg_result = aggregate_signals(signals)
+        lineage_hash = signals[0][1].lineage_hash if signals else "none"
+        ib_payload = map_to_insightbridge_contract(agg_result, lineage_hash)
+        return ib_payload
+    except Exception as e:
+        logger.error("Aggregation error", exc_info=True)
+        return {"error": str(e), "error_code": "AGGREGATION_FAILED"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "service": "text-risk-scoring"}

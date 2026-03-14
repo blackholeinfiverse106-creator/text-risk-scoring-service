@@ -2,6 +2,7 @@ from typing import Dict, Any
 import hashlib
 import json
 import logging
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +53,15 @@ def map_to_insightbridge_contract(internal_result: Any, lineage_hash: str) -> Di
     decision = None
     authority = "NONE"
     
+    signal_timestamp = datetime.now(timezone.utc).isoformat()
+    
     output = {
-        "enforcement_signal_id": signal_id,
-        "epistemic_source_hash_chain": lineage_hash,
+        "signal_id": signal_id,
+        "source_type": "text_risk_scoring_service",
+        "signal_timestamp": signal_timestamp,
+        "lineage_reference": lineage_hash,
         "aggregated_risk_score": float(risk_score),
-        "bounded_confidence": float(confidence),
+        "epistemic_confidence": float(confidence),
         "contradiction_flag": contradiction_flag,
         "abstention_flag": abstain_flag,
         "decision": decision,

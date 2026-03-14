@@ -111,8 +111,8 @@ def simulate_single_pipeline(run_id: int) -> Dict[str, Any]:
     audit = {
         "run_id": run_id,
         "lineage_hash_in": dgic.lineage_hash,
-        "epistemic_source_hash_out": ib_payload.get("epistemic_source_hash_chain"),
-        "is_contaminated": dgic.lineage_hash != ib_payload.get("epistemic_source_hash_chain"),
+        "epistemic_source_hash_out": ib_payload.get("lineage_reference"),
+        "is_contaminated": dgic.lineage_hash != ib_payload.get("lineage_reference"),
         "state_in": state.value,
         "decision_in": ib_payload.get("decision"),
         "authority_in": ib_payload.get("authority"),

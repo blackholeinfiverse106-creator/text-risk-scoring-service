@@ -1,5 +1,5 @@
 # InsightBridge Integration Simulation Report
-**Date:** 2026-03-10T18:28:03Z  
+**Date:** 2026-03-14T07:39:07Z  
 **Phase:** v-insightbridge-ready  
 **Status:** ✅ CERTIFIED  
 
@@ -35,7 +35,7 @@ As demonstrated in this simulation, any attempt by the scoring service to mutate
 | `6e1f66de8bce7e81...` | `0.0` | `0.0` | PASS (Upstream Abstained -> InsightBridge Fail-Open Fallback) |
 | `6df73d31a817f1cb...` | `0.4` | `0.8` | REJECTED (Schema/Invariant): 'BLOCK' is not of type 'null' |
 | `6df73d31a817f1cb...` | `0.4` | `0.8` | REJECTED (Schema/Invariant): 'NONE' was expected |
-| `2141dbab6f36d01b...` | `0.0` | `1.0` | REJECTED (Schema/Invariant): 'epistemic_source_hash_chain' is a required property |
+| `2141dbab6f36d01b...` | `0.0` | `1.0` | REJECTED (Schema/Invariant): 'lineage_reference' is a required property |
 
 
 **Phase Tag:** `v-insightbridge-ready`

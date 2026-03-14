@@ -67,7 +67,7 @@ class InsightBridgeMock:
             self.abstentions += 1
             action = "PASS (Upstream Abstained -> InsightBridge Fail-Open Fallback)"
         elif payload.get("aggregated_risk_score", 0.0) >= 0.7:
-            if payload.get("bounded_confidence", 0.0) > 0.8:
+            if payload.get("epistemic_confidence", 0.0) > 0.8:
                 self.actions_taken += 1
                 action = "BLOCK (High Risk, High Confidence -> Downstream Enforcement)"
             else:
@@ -101,12 +101,14 @@ def produce_v4_payload(text: str, state: EpistemicState, entropy: float, contra:
     agg = aggregate_signals([(text, dgic)])
     
     return {
-        "enforcement_signal_id": agg.aggregation_hash,
+        "signal_id": agg.aggregation_hash,
+        "source_type": "text_risk_scoring_service",
+        "signal_timestamp": datetime.now(timezone.utc).isoformat(),
+        "lineage_reference": dgic.evidence_hash,
         "aggregated_risk_score": agg.aggregate_risk_score,
-        "bounded_confidence": agg.aggregate_confidence,
+        "epistemic_confidence": agg.aggregate_confidence,
         "contradiction_flag": agg.contradiction_count > 0,
         "abstention_flag": agg.all_abstained,
-        "epistemic_source_hash_chain": dgic.evidence_hash,
         "decision": None,
         "authority": "NONE"
     }
@@ -150,7 +152,7 @@ def run_simulation() -> dict:
     
     # Inject missing-field payload
     bad_payload3 = produce_v4_payload("safe", EpistemicState.KNOWN, 0.0, False)
-    bad_payload3.pop("epistemic_source_hash_chain", None) # MISSING
+    bad_payload3.pop("lineage_reference", None) # MISSING
     res = mock.consume(bad_payload3)
     print(f"  [bad_schema     ] -> {res}")
 
@@ -172,9 +174,9 @@ def emit_report(stats: dict):
     
     log_rows = ""
     for entry in stats["logs"]:
-        sig_id = entry["payload"].get("enforcement_signal_id", "N/A")[:16] + "..." 
+        sig_id = entry["payload"].get("signal_id", "N/A")[:16] + "..." 
         rs = entry["payload"].get("aggregated_risk_score", "N/A")
-        bc = entry["payload"].get("bounded_confidence", "N/A")
+        bc = entry["payload"].get("epistemic_confidence", "N/A")
         action = entry["action"]
         log_rows += f"| `{sig_id}` | `{rs}` | `{bc}` | {action} |\n"
 

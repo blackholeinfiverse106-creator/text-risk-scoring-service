@@ -11,9 +11,9 @@ The pipeline was evaluated in a 100-thread concurrent pool, simulating peak asyn
 ## 2. Latency Benchmarks (ms)
 | Percentile | Engine Total Latency |
 |---|---|
-| Average | 169.383 ms |
-| p95 | 373.307 ms |
-| p99 | 407.566 ms |
+| Average | 171.874 ms |
+| p95 | 376.375 ms |
+| p99 | 405.735 ms |
 
 *(Note: The latency measures pure python overhead, bypassing actual I/O boundaries which would be handled asynchronously by a broader framework).*
 
