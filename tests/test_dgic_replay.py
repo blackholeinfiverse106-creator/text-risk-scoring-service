@@ -41,7 +41,7 @@ REPLAY_CORPUS = [
     ("inferred_low_e",   "scam phishing money laundering",            EpistemicState.INFERRED,  0.1,  False, False),
     ("inferred_mid_e",   "cocaine heroin dealer overdose",            EpistemicState.INFERRED,  0.5,  False, True),
     ("inferred_high_e",  "terrorism jihad isis extremist radicalize", EpistemicState.INFERRED,  1.0,  True,  False),
-    ("ambiguous_low",    "the fight was brutal but legal",            EpistemicState.AMBIGUOUS, 0.0,  True,  True),
+    ("ambiguous_low",    "the fight was brutal but legal",            EpistemicState.AMBIGUOUS, 0.0,  True,  False),
     ("ambiguous_high",   "kill murder stab shoot bomb blast",         EpistemicState.AMBIGUOUS, 0.0,  False, False),
     ("unknown_safe",     "good morning, have a nice day",             EpistemicState.UNKNOWN,   0.0,  False, False),
     ("unknown_risky",    "suicide self harm want to die cut myself",  EpistemicState.UNKNOWN,   0.0,  True,  False),

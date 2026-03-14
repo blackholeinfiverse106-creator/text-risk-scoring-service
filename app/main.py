@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.schemas import InputSchema, OutputSchema, DGICIngestRequest, AggregateRequest
 from app.engine import analyze_text
 from app.contract_enforcement import validate_input_contract, validate_output_contract, ContractViolation
-from app.dgic_adapter import validate_dgic_input, apply_epistemic_modifiers, DGICContractViolation
+from app.dgic_adapter import validate_dgic_input, apply_dgic_modifiers, DGICContractViolation
 from app.enforcement_aggregator import aggregate_signals
 from app.insightbridge_adapter import map_to_insightbridge_contract
 import logging
@@ -89,7 +89,7 @@ def dgic_ingest(payload: DGICIngestRequest):
     try:
         dgic_input = validate_dgic_input(payload.dgic_envelope)
         base_result = analyze_text(payload.text, correlation_id=correlation_id)
-        final_result = apply_epistemic_modifiers(base_result, dgic_input)
+        final_result = apply_dgic_modifiers(base_result, adapter_result=adapt_dgic(dgic_input))
         return final_result
     except DGICContractViolation as e:
         logger.warning(f"DGIC Contract violation | code={e.code}", extra={"correlation_id": correlation_id, "details": {"why": e.message}})
