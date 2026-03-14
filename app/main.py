@@ -10,6 +10,9 @@ from app.insightbridge_adapter import map_to_insightbridge_contract
 import logging
 import uuid
 from app.observability import setup_json_logging
+from app.unified_schemas import UnifiedAggregateRequest, UnifiedSignalInput
+from app.signal_aggregator import aggregate_unified_signals, UnifiedSignal, validate_dgic_input, DGICInput
+
 
 # Initialize JSON logging
 setup_json_logging()
@@ -115,6 +118,39 @@ def aggregate_endpoint(payload: AggregateRequest):
     except Exception as e:
         logger.error("Aggregation error", exc_info=True)
         return {"error": str(e), "error_code": "AGGREGATION_FAILED"}
+
+@app.post("/api/v1/aggregate/unified")
+def aggregate_unified_endpoint(payload: UnifiedAggregateRequest):
+    correlation_id = str(uuid.uuid4())[:8]
+    logger.info("Unified aggregation request received", extra={"correlation_id": correlation_id, "event_type": "unified_aggregation"})
+    try:
+        if not payload.signals:
+            return {"error": "No signals provided"}
+            
+        unified_signals = []
+        for p in payload.signals:
+            # Structurally validate and convert DGIC envelope
+            dgic_obj = validate_dgic_input(p.dgic_envelope)
+            
+            sig = UnifiedSignal(
+                signal_id=p.signal_id,
+                signal_type=p.signal_type,
+                base_risk_score=p.base_risk_score,
+                base_confidence_score=p.base_confidence_score,
+                dgic_envelope=dgic_obj
+            )
+            unified_signals.append(sig)
+            
+        agg_result = aggregate_unified_signals(unified_signals)
+        
+        # Use first valid lineage hash for InsightBridge mapping
+        lineage_hash = unified_signals[0].dgic_envelope.lineage_hash if unified_signals else "none"
+        ib_payload = map_to_insightbridge_contract(agg_result, lineage_hash)
+        return ib_payload
+    except Exception as e:
+        logger.error("Unified aggregation error", exc_info=True)
+        return {"error": str(e), "error_code": "UNIFIED_AGGREGATION_FAILED"}
+
 
 @app.get("/health")
 def health_check():
