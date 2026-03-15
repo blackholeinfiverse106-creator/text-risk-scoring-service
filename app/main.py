@@ -12,6 +12,8 @@ import uuid
 from app.observability import setup_json_logging
 from app.unified_schemas import UnifiedAggregateRequest, UnifiedSignalInput
 from app.signal_aggregator import aggregate_unified_signals, UnifiedSignal, validate_dgic_input, DGICInput
+from app.dgic_enforcement_bridge import wrap_in_dgic_envelope
+from app.insightbridge_telemetry import emit_telemetry_dict
 
 
 # Initialize JSON logging
@@ -143,9 +145,25 @@ def aggregate_unified_endpoint(payload: UnifiedAggregateRequest):
             
         agg_result = aggregate_unified_signals(unified_signals)
         
-        # Use first valid lineage hash for InsightBridge mapping
+        # Day 2A: Wrap in DGIC epistemic envelope
+        dgic_envelope = wrap_in_dgic_envelope(agg_result)
+        
+        # Day 2B: Emit InsightBridge telemetry event
+        telemetry = emit_telemetry_dict(dgic_envelope)
+        
+        # Map to InsightBridge contract
         lineage_hash = unified_signals[0].dgic_envelope.lineage_hash if unified_signals else "none"
         ib_payload = map_to_insightbridge_contract(agg_result, lineage_hash)
+        
+        # Enrich response with DGIC envelope and telemetry
+        ib_payload["dgic_envelope"] = {
+            "epistemic_confidence": dgic_envelope.epistemic_confidence,
+            "signal_lineage": dgic_envelope.signal_lineage,
+            "collapse_state": dgic_envelope.collapse_state,
+            "truth_boundary_reference": dgic_envelope.truth_boundary_reference,
+        }
+        ib_payload["telemetry"] = telemetry
+        
         return ib_payload
     except Exception as e:
         logger.error("Unified aggregation error", exc_info=True)

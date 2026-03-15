@@ -74,6 +74,47 @@ python -m pytest tests/ decision-injection-tests/ escalation-tests/ -q
 
 Full contract: see [`contracts-v3.md`](contracts-v3.md).
 
+### `POST /api/v1/aggregate/unified`
+
+Multi-signal aggregation endpoint. Accepts 1–32 typed signals, returns an InsightBridge-compatible payload with DGIC envelope and telemetry.
+
+**Request:**
+```json
+{
+  "signals": [
+    {
+      "signal_id": "sig-001",
+      "signal_type": "POLICY_VIOLATION_SIGNAL",
+      "base_risk_score": 0.9,
+      "base_confidence_score": 1.0,
+      "dgic_envelope": {
+        "version": "schema_v1",
+        "lineage_hash": "<SHA-256>",
+        "envelope_hash": "<SHA-256>",
+        "payload": {
+          "epistemic_state": "KNOWN",
+          "entropy_score": 0.0,
+          "contradiction_flag": false
+        }
+      }
+    }
+  ]
+}
+```
+
+**Signal types & weights:**
+
+| Type | Weight |
+|---|---|
+| `POLICY_VIOLATION_SIGNAL` | 1.5 |
+| `BEHAVIOR_ANOMALY_SIGNAL` | 1.2 |
+| `TEXT_RISK_SIGNAL` | 1.0 |
+| `EXTERNAL_DETECTOR_SIGNAL` | 0.8 |
+
+**Response** includes `aggregated_risk_score`, `epistemic_confidence`, `dgic_envelope` (with `collapse_state`), and `telemetry` sidecar.
+
+Full integration guide: see [`SYSTEM_INTEGRATION_GUIDE.md`](SYSTEM_INTEGRATION_GUIDE.md).
+
 ---
 
 ## Risk Categories
@@ -96,12 +137,16 @@ Full contract: see [`contracts-v3.md`](contracts-v3.md).
 ## Architecture
 
 ```
-POST /analyze
-     │
-     ├─ validate_input_contract()   [contract_enforcement.py]
-     ├─ analyze_text()              [engine.py]  ← all logic here
-     ├─ validate_output_contract()  [contract_enforcement.py]
-     └─ Return structured response
+POST /analyze                        POST /api/v1/aggregate/unified
+     │                                    │
+     ├─ validate_input_contract()         ├─ Core Adapter (schema validation)
+     ├─ analyze_text()                    ├─ Multi-Signal Aggregator
+     ├─ validate_output_contract()        │   ├─ Per-signal DGIC scoring
+     └─ Return response                  │   ├─ Weighted mean + penalty
+                                          │   └─ Bounded [0.0, 1.0]
+                                          ├─ DGIC Enforcement Bridge
+                                          ├─ InsightBridge Telemetry
+                                          └─ Return enriched payload
 ```
 
 No database. No cache. No external calls. Fully self-contained.
@@ -112,7 +157,8 @@ No database. No cache. No external calls. Fully self-contained.
 
 | Proof | Command | Result |
 |---|---|---|
-| Determinism | `python replay_harness.py` | 150k runs, 0 divergences |
+| Engine determinism | `python replay_harness.py` | 150k runs, 0 divergences |
+| Aggregator determinism | `pytest tests/test_deterministic_signal_replay.py` | 7k runs, 0 divergences |
 | Thread safety | `python thread_safety_proof.py` | 200 threads, 0 divergences |
 | Error propagation | `python error-propagation-proof.py` | 9/9 paths verified |
 | Trace lineage | `python trace-lineage-demo.py` | 3/3 proven, 0 bleed |
@@ -129,6 +175,9 @@ No database. No cache. No external calls. Fully self-contained.
 | [`fail-mode-matrix.md`](fail-mode-matrix.md) | Fail-open vs fail-closed for every error code |
 | [`logging-schema-v1.md`](logging-schema-v1.md) | **Frozen** log schema |
 | [`misuse-matrix-v2.md`](misuse-matrix-v2.md) | 34 misuse vectors and contract responses |
+| [`MULTI_SIGNAL_AGGREGATOR_ARCHITECTURE.md`](MULTI_SIGNAL_AGGREGATOR_ARCHITECTURE.md) | Multi-signal aggregator design |
+| [`SYSTEM_INTEGRATION_GUIDE.md`](SYSTEM_INTEGRATION_GUIDE.md) | Integration guide for DGIC, Core, InsightBridge |
+| [`DETERMINISM_PROOF.md`](DETERMINISM_PROOF.md) | Aggregator determinism proof (7k executions) |
 | [`FINAL-HANDOVER-PHASE-4.md`](FINAL-HANDOVER-PHASE-4.md) | Integration handover |
 
 ---
