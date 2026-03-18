@@ -4,7 +4,7 @@ All four parts exposed as discrete pytest tests.
 """
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
 
 from chaos_harness import (
     run_part_a, run_part_b, run_part_c, run_part_d,

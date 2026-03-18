@@ -1,3 +1,7 @@
+# ============================================================
+# BHIV Enforcement Gateway — .gitignore
+# ============================================================
+
 # Environments
 venv/
 env/
@@ -23,13 +27,31 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+dist/
+build/
 
 # Testing / Pytest
 .pytest_cache/
 .coverage
 htmlcov/
 
-# Editor
+# Editor / IDE
 .vscode/
 .idea/
 *.swp
+*.swo
+*~
+
+# OS Files
+Thumbs.db
+.DS_Store
+
+# Docker
+*.pid
+
+# Logs and generated output
+*.log
+replay-test-logs/
+
+# Generated reports
+formal_determinism_proof.log

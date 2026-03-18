@@ -1,0 +1,44 @@
+# Version control
+.git
+.gitignore
+
+# Python runtime
+__pycache__
+*.pyc
+*.pyo
+venv/
+.venv/
+env/
+*.egg-info/
+
+# Tests and tools — not shipped in production image
+tests/
+tools/
+docs/
+ui/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Build artifacts
+dist/
+build/
+*.egg
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Dev dependencies
+requirements-dev.txt
+
+# Logs and reports
+*.log
+*.txt

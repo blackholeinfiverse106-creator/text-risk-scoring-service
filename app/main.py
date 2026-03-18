@@ -4,14 +4,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.schemas import InputSchema, OutputSchema, DGICIngestRequest, AggregateRequest
 from app.engine import analyze_text
 from app.contract_enforcement import validate_input_contract, validate_output_contract, ContractViolation
-from app.dgic_adapter import validate_dgic_input, apply_dgic_modifiers, DGICContractViolation
+from app.dgic_adapter import validate_dgic_input, adapt_dgic, apply_dgic_modifiers, DGICContractViolation
 from app.enforcement_aggregator import aggregate_signals
 from app.insightbridge_adapter import map_to_insightbridge_contract
 import logging
 import uuid
 from app.observability import setup_json_logging
 from app.unified_schemas import UnifiedAggregateRequest, UnifiedSignalInput
-from app.signal_aggregator import aggregate_unified_signals, UnifiedSignal, validate_dgic_input, DGICInput
+from app.signal_aggregator import aggregate_unified_signals, UnifiedSignal, SignalType
 from app.dgic_enforcement_bridge import wrap_in_dgic_envelope
 from app.insightbridge_telemetry import emit_telemetry_dict
 
