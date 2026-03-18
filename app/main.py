@@ -14,13 +14,15 @@ from app.unified_schemas import UnifiedAggregateRequest, UnifiedSignalInput
 from app.signal_aggregator import aggregate_unified_signals, UnifiedSignal, SignalType
 from app.dgic_enforcement_bridge import wrap_in_dgic_envelope
 from app.insightbridge_telemetry import emit_telemetry_dict
+from app.enforcement_schemas import EvaluateActionRequest, EvaluateActionResponse
+from app.enforcement_gate import evaluate_action
 
 
 # Initialize JSON logging
 setup_json_logging()
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Text Risk Scoring Service")
+app = FastAPI(title="BHIV Enforcement Gateway")
 
 # CORS middleware - must be added before routes
 app.add_middleware(
@@ -170,6 +172,54 @@ def aggregate_unified_endpoint(payload: UnifiedAggregateRequest):
         return {"error": str(e), "error_code": "UNIFIED_AGGREGATION_FAILED"}
 
 
+# ============================================================
+# Canonical Enforcement Gateway Endpoint
+# ============================================================
+
+@app.post("/api/v1/enforce/evaluate_action", response_model=EvaluateActionResponse)
+def enforce_evaluate_action(payload: EvaluateActionRequest):
+    """
+    The deterministic enforcement gate for all BHIV systems.
+    All proposed actions MUST pass through this endpoint before execution.
+    """
+    correlation_id = str(uuid.uuid4())[:8]
+    logger.info(
+        "Enforcement evaluation request received",
+        extra={
+            "correlation_id": correlation_id,
+            "event_type": "enforcement_request",
+            "action_id": payload.action_id,
+            "source_system": payload.source_system.value,
+        },
+    )
+    try:
+        result = evaluate_action(payload)
+        logger.info(
+            f"Enforcement result: {result.enforcement_decision}",
+            extra={
+                "correlation_id": correlation_id,
+                "event_type": "enforcement_result",
+                "decision": result.enforcement_decision,
+                "risk_score": result.risk_score,
+                "trace_hash": result.trace_hash,
+            },
+        )
+        return result
+    except Exception as e:
+        logger.error(
+            "Enforcement evaluation error",
+            exc_info=True,
+            extra={"correlation_id": correlation_id, "event_type": "enforcement_error"},
+        )
+        return EvaluateActionResponse(
+            risk_score=0.0,
+            enforcement_decision="ABSTAIN",
+            confidence=0.0,
+            failure_reason=f"Internal enforcement error: {str(e)}",
+            trace_hash="0" * 64,
+        )
+
+
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "service": "text-risk-scoring"}
+    return {"status": "ok", "service": "bhiv-enforcement-gateway"}
