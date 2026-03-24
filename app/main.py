@@ -220,6 +220,113 @@ def enforce_evaluate_action(payload: EvaluateActionRequest):
         )
 
 
+# ============================================================
+# Core Execution Gate Endpoint
+# ============================================================
+
+from app.core_execution_gate import submit_proposal, CoreExecutionResult
+from app.enforcement_schemas import DGICEpistemicStateInput, ContextSignal, SourceSystem
+from pydantic import BaseModel as _CoreBaseModel
+
+class CoreProposalRequest(_CoreBaseModel):
+    """API-level request for Core action proposals."""
+    proposal_id: str
+    actor: str
+    proposed_action: str
+    context_signals: list[ContextSignal] = []
+    dgic_epistemic_state: DGICEpistemicStateInput
+    source_system: SourceSystem
+
+@app.post("/api/v1/core/submit_proposal", response_model=CoreExecutionResult)
+def core_submit_proposal(payload: CoreProposalRequest):
+    """
+    Core execution gate. Submit an action proposal for enforcement evaluation.
+    Execution occurs ONLY if the decision is ALLOW.
+    """
+    correlation_id = str(uuid.uuid4())[:8]
+    logger.info(
+        "Core proposal received",
+        extra={
+            "correlation_id": correlation_id,
+            "event_type": "core_proposal_received",
+            "proposal_id": payload.proposal_id,
+            "source_system": payload.source_system.value,
+        },
+    )
+    try:
+        result = submit_proposal(
+            proposal_id=payload.proposal_id,
+            actor=payload.actor,
+            proposed_action=payload.proposed_action,
+            context_signals=payload.context_signals,
+            dgic_epistemic_state=payload.dgic_epistemic_state,
+            source_system=payload.source_system,
+        )
+        logger.info(
+            f"Core result: {result.execution_decision} | executed={result.executed}",
+            extra={
+                "correlation_id": correlation_id,
+                "event_type": "core_result",
+                "decision": result.execution_decision,
+                "executed": result.executed,
+                "trace_hash": result.trace_hash,
+            },
+        )
+        return result
+    except Exception as e:
+        logger.error(
+            "Core proposal error",
+            exc_info=True,
+            extra={"correlation_id": correlation_id, "event_type": "core_error"},
+        )
+        return CoreExecutionResult(
+            proposal_id=payload.proposal_id,
+            execution_decision="BLOCK",
+            executed=False,
+            risk_score=0.0,
+            confidence=0.0,
+            failure_reason=f"Internal error: {str(e)}",
+            trace_hash="0" * 64,
+            gate_decision="ABSTAIN",
+        )
+
+# ============================================================
+# Bucket Ledger + Replay Verification Endpoints
+# ============================================================
+
+from app.bucket_ledger import get_bucket_entries, get_bucket_entry, BucketEntry
+from app.replay_verifier import verify_by_trace_hash, verify_all, ReplayResult
+from dataclasses import asdict as _asdict
+
+@app.get("/api/v1/bucket/entries")
+def bucket_list_entries():
+    """List all enforcement bucket entries."""
+    entries = get_bucket_entries()
+    return [_asdict(e) for e in entries]
+
+@app.post("/api/v1/bucket/replay/{trace_hash}")
+def bucket_replay_entry(trace_hash: str):
+    """Replay-verify a specific bucket entry by trace hash."""
+    result = verify_by_trace_hash(trace_hash)
+    if result is None:
+        return JSONResponse(
+            status_code=404,
+            content={"error": f"No bucket entry found for trace_hash={trace_hash}"},
+        )
+    return _asdict(result)
+
+@app.post("/api/v1/bucket/replay_all")
+def bucket_replay_all():
+    """Replay-verify ALL bucket entries."""
+    results = verify_all()
+    return {
+        "total": len(results),
+        "passed": sum(1 for r in results if r.match),
+        "failed": sum(1 for r in results if not r.match),
+        "results": [_asdict(r) for r in results],
+    }
+
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "bhiv-enforcement-gateway"}

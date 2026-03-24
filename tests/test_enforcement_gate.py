@@ -138,7 +138,7 @@ class TestDenyPath:
     def test_high_context_signal_causes_deny(self):
         """High context signal (>= 0.7) → DENY regardless of clean text."""
         signals = [
-            ContextSignal(signal_id="threat-1", signal_type="threat", value=0.85, source="insightbridge"),
+            ContextSignal(signal_id="threat-1", signal_type="security_alert", value=0.85, source="insightbridge"),
         ]
         req = _make_request(proposed_action="Send greeting", context_signals=signals)
         result = evaluate_action(req)
@@ -249,8 +249,8 @@ class TestContextSignalAggregation:
         req = _make_request(context_signals=[])
         assert aggregate_context_signals(req) == 0.0
 
-    def test_max_signal_used(self):
-        """Aggregation uses max (fail-high) of signal values."""
+    def test_non_insightbridge_max_signal_used(self):
+        """Non-InsightBridge aggregation uses raw max (fail-high)."""
         signals = [
             ContextSignal(signal_id="a", signal_type="threat", value=0.2, source="s1"),
             ContextSignal(signal_id="b", signal_type="anomaly", value=0.8, source="s2"),
@@ -258,6 +258,28 @@ class TestContextSignalAggregation:
         ]
         req = _make_request(context_signals=signals)
         assert aggregate_context_signals(req) == 0.8
+
+    def test_insightbridge_signals_are_weighted(self):
+        """InsightBridge signals are mathematically weighted before max is taken."""
+        signals = [
+            # 0.8 * 0.5 (anomaly weight) = 0.4 weighted
+            ContextSignal(signal_id="b", signal_type="anomaly_signal", value=0.8, source="INSIGHTBRIDGE"),
+            # 0.6 * 1.0 (security alert weight) = 0.6 weighted
+            ContextSignal(signal_id="c", signal_type="security_alert", value=0.6, source="INSIGHTBRIDGE"),
+        ]
+        req = _make_request(context_signals=signals)
+        # Even though anomaly's raw 0.8 is higher than security_alert's 0.6,
+        # the security_alert's weighted 0.6 wins over the anomaly's weighted 0.4
+        assert aggregate_context_signals(req) == 0.6
+        
+    def test_insightbridge_fallback_weight(self):
+        """Unknown InsightBridge signal types fallback to 0.1 weight."""
+        signals = [
+            # 0.9 * 0.1 (unknown weight) = 0.09
+            ContextSignal(signal_id="a", signal_type="made_up", value=0.9, source="INSIGHTBRIDGE"),
+        ]
+        req = _make_request(context_signals=signals)
+        assert aggregate_context_signals(req) == 0.09
 
 
 # ============================================================

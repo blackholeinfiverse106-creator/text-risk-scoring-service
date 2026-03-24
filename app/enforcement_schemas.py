@@ -38,13 +38,19 @@ class SourceSystem(str, Enum):
 class EnforcementDecision(str, Enum):
     """
     The deterministic enforcement decision.
-    ALLOW  — action is permitted to execute.
-    DENY   — action is blocked; execution MUST NOT proceed.
-    ABSTAIN — system cannot evaluate; caller must handle conservatively.
+    ALLOW             — action is permitted to execute.
+    DENY              — action is blocked; execution MUST NOT proceed.
+    ABSTAIN           — system cannot evaluate; caller must handle conservatively.
+    BLOCK             — Core-specific hard block (equivalent to DENY).
+    ESCALATE          — risk too ambiguous for automated decision; requires human review.
+    REQUEST_MORE_DATA — insufficient signal evidence to decide; caller must supply more data.
     """
     ALLOW = "ALLOW"
     DENY = "DENY"
     ABSTAIN = "ABSTAIN"
+    BLOCK = "BLOCK"
+    ESCALATE = "ESCALATE"
+    REQUEST_MORE_DATA = "REQUEST_MORE_DATA"
 
 
 # ============================================================

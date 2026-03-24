@@ -26,6 +26,7 @@ from app.enforcement_schemas import (
     EvaluateActionRequest,
     EvaluateActionResponse,
     EnforcementDecision,
+    SourceSystem,
 )
 from app.dgic_adapter import (
     adapt_dgic,
@@ -39,6 +40,12 @@ from app.dgic_snapshot_consumer import (
 )
 from app.enforcement_ledger import record_decision
 from app.engine import analyze_text
+from app.insightbridge_rules import calculate_weighted_signal
+from app.marine_rules import calculate_marine_signal
+from app.aiaic_rules import calculate_aiaic_signal
+from app.c4s_rules import calculate_c4s_signal
+from app.bucket_ledger import write_bucket_entry
+from app.dgic_snapshot_consumer import snapshot_to_dict
 
 logger = logging.getLogger(__name__)
 
@@ -101,13 +108,32 @@ def aggregate_context_signals(request: EvaluateActionRequest) -> float:
     """
     Deterministic weighted aggregation of context signals.
     Returns 0.0 if no signals provided.
-    Uses max-of-signals (fail-high) strategy.
+    
+    InsightBridge signals are mathematically weighted by severity type.
+    Other sources currently default to 1.0 multiplier (raw value).
+    
+    Uses max-of-weighted-signals (fail-high) strategy.
     """
     if not request.context_signals:
         return 0.0
 
-    # Fail-high: take the maximum signal value
-    return max(s.value for s in request.context_signals)
+    weighted_values = []
+    for signal in request.context_signals:
+        source_upper = signal.source.upper()
+        if source_upper == SourceSystem.INSIGHTBRIDGE.value:
+            weighted_values.append(calculate_weighted_signal(signal))
+        elif source_upper == SourceSystem.MARINE_INTELLIGENCE.value:
+            weighted_values.append(calculate_marine_signal(signal))
+        elif source_upper == SourceSystem.AIAIC.value:
+            weighted_values.append(calculate_aiaic_signal(signal))
+        elif source_upper == SourceSystem.C4S.value:
+            weighted_values.append(calculate_c4s_signal(signal))
+        else:
+            # Other signals maintain 1.0 multiplier (raw value)
+            weighted_values.append(signal.value)
+
+    # Fail-high: take the maximum computed weighted signal
+    return max(weighted_values)
 
 
 # ============================================================
@@ -263,7 +289,19 @@ def evaluate_action(request: EvaluateActionRequest) -> EvaluateActionResponse:
         response=response,
     )
 
-    # Step 12: Log decision
+    # Step 12: Write to persistent bucket ledger
+    write_bucket_entry(
+        action_id=request.action_id,
+        request_payload=request.model_dump(mode="json"),
+        dgic_snapshot=snapshot_to_dict(snapshot),
+        decision=response.enforcement_decision.value,
+        risk_score=final_risk,
+        confidence=confidence,
+        failure_reason=failure_reason,
+        trace_hash=trace_hash,
+    )
+
+    # Step 13: Log decision
     logger.info(
         f"Enforcement decision: {decision.value}",
         extra={
