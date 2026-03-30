@@ -13,8 +13,7 @@ import threading
 from dataclasses import dataclass
 from typing import List, Dict, Any
 
-from app.enforcement_schemas import EvaluateActionRequest, EvaluateActionResponse
-from app.dgic_snapshot_consumer import DGICSnapshot, snapshot_to_dict
+from app.enforcement_schemas import EvaluateActionRequest, SarathiEvaluateResponse
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +27,7 @@ class EnforcementLedgerEntry:
     """
     A single, immutable enforcement decision record.
     """
-    correlation_id: str
-    action_id: str
+    execution_id: str
     trace_hash: str
     timestamp_utc: str
     
@@ -55,26 +53,24 @@ class _EnforcementLedger:
 
     def record(
         self,
-        correlation_id: str,
+        execution_id: str,
         timestamp_utc: str,
         request: EvaluateActionRequest,
-        snapshot: DGICSnapshot,
-        response: EvaluateActionResponse,
+        sarathi_response: SarathiEvaluateResponse,
     ) -> EnforcementLedgerEntry:
         """
-        Record a decision to the append-only ledger.
+        Record a Sarathi-approved decision to the append-only ledger.
         """
         entry = EnforcementLedgerEntry(
-            correlation_id=correlation_id,
-            action_id=request.action_id,
-            trace_hash=response.trace_hash,
+            execution_id=execution_id,
+            trace_hash=sarathi_response.trace_hash,
             timestamp_utc=timestamp_utc,
             request_payload=request.model_dump(mode="json"),
-            dgic_snapshot=snapshot_to_dict(snapshot),
-            decision=response.enforcement_decision.value,
-            risk_score=response.risk_score,
-            confidence=response.confidence,
-            failure_reason=response.failure_reason,
+            dgic_snapshot={},
+            decision=sarathi_response.sarathi_decision.value,
+            risk_score=sarathi_response.risk_score,
+            confidence=sarathi_response.confidence,
+            failure_reason=sarathi_response.failure_reason,
         )
 
         with self._lock:
@@ -84,7 +80,7 @@ class _EnforcementLedger:
             f"Ledger entry recorded | trace_hash={entry.trace_hash[:8]}...",
             extra={
                 "event_type": "ledger_record",
-                "action_id": entry.action_id,
+                "execution_id": entry.execution_id,
                 "decision": entry.decision,
             }
         )
@@ -118,13 +114,12 @@ ledger_instance = _EnforcementLedger()
 # ============================================================
 
 def record_decision(
-    correlation_id: str,
+    execution_id: str,
     timestamp_utc: str,
     request: EvaluateActionRequest,
-    snapshot: DGICSnapshot,
-    response: EvaluateActionResponse,
+    sarathi_response: SarathiEvaluateResponse,
 ) -> EnforcementLedgerEntry:
-    return ledger_instance.record(correlation_id, timestamp_utc, request, snapshot, response)
+    return ledger_instance.record(execution_id, timestamp_utc, request, sarathi_response)
 
 def get_ledger_entries() -> List[EnforcementLedgerEntry]:
     return ledger_instance.get_all()

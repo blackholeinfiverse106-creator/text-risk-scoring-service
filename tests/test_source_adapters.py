@@ -12,7 +12,7 @@ from app.enforcement_schemas import ContextSignal, SourceSystem, EvaluateActionR
 from app.marine_rules import calculate_marine_signal
 from app.aiaic_rules import calculate_aiaic_signal
 from app.c4s_rules import calculate_c4s_signal
-from app.enforcement_gate import aggregate_context_signals
+from app.sarathi_governance import aggregate_context_signals
 
 
 # ============================================================
@@ -176,7 +176,7 @@ class TestGateAggregation:
         from app.enforcement_schemas import DGICEpistemicStateInput
         # Create a dummy request just to test the signal aggregation
         request = EvaluateActionRequest(
-            action_id="test",
+            execution_id="test",
             actor="test",
             proposed_action="test",
             context_signals=[c4s_signal, marine_signal, aiaic_signal],
@@ -205,7 +205,7 @@ class TestGateAggregation:
         
         from app.enforcement_schemas import DGICEpistemicStateInput
         request = EvaluateActionRequest(
-            action_id="test",
+            execution_id="test",
             actor="test",
             proposed_action="test",
             context_signals=[raw_signal],

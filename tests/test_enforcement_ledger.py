@@ -15,8 +15,8 @@ from app.enforcement_ledger import (
 from app.dgic_snapshot_consumer import ingest_dgic_snapshot
 from app.enforcement_schemas import (
     EvaluateActionRequest,
-    EvaluateActionResponse,
-    EnforcementDecision,
+    SarathiEvaluateResponse,
+    SarathiDecision,
     DGICEpistemicStateInput,
     SourceSystem,
 )
@@ -52,7 +52,7 @@ def _make_request():
     )
     
     return EvaluateActionRequest(
-        action_id="act-1",
+        execution_id="act-1",
         actor="test",
         proposed_action="test action",
         context_signals=[],
@@ -62,9 +62,10 @@ def _make_request():
 
 
 def _make_response():
-    return EvaluateActionResponse(
+    return SarathiEvaluateResponse(
+        execution_id="corr-1",
         risk_score=0.1,
-        enforcement_decision=EnforcementDecision.ALLOW,
+        sarathi_decision=SarathiDecision.ALLOW,
         confidence=0.9,
         failure_reason=None,
         trace_hash="a" * 64,
@@ -79,48 +80,48 @@ class TestEnforcementLedger:
         snap = _make_snapshot()
         res = _make_response()
         
-        entry = record_decision("corr-1", "2024-01-01T00:00:00Z", req, snap, res)
+        entry = record_decision("corr-1", "2024-01-01T00:00:00Z", req, res)
         
         assert isinstance(entry, EnforcementLedgerEntry)
-        assert entry.correlation_id == "corr-1"
-        assert entry.action_id == "act-1"
+        assert entry.execution_id == "corr-1"
         assert entry.decision == "ALLOW"
         assert entry.trace_hash == "a" * 64
         
         # Verify JSON serializable inputs
         assert isinstance(entry.request_payload, dict)
         assert isinstance(entry.dgic_snapshot, dict)
-        assert entry.dgic_snapshot["snapshot_hash"] == snap.snapshot_hash
+        assert entry.dgic_snapshot == {}
 
     def test_get_ledger_entries(self):
         """Can retrieve all ledger entries."""
         assert len(get_ledger_entries()) == 0
         
-        record_decision("corr-1", "ts1", _make_request(), _make_snapshot(), _make_response())
-        record_decision("corr-2", "ts2", _make_request(), _make_snapshot(), _make_response())
+        record_decision("corr-1", "ts1", _make_request(), _make_response())
+        record_decision("corr-2", "ts2", _make_request(), _make_response())
         
         entries = get_ledger_entries()
         assert len(entries) == 2
-        assert entries[0].correlation_id == "corr-1"
-        assert entries[1].correlation_id == "corr-2"
+        assert entries[0].execution_id == "corr-1"
+        assert entries[1].execution_id == "corr-2"
 
     def test_get_by_trace_hash(self):
         """Can look up entry by deterministic trace hash."""
         res_a = _make_response()
-        res_b = EvaluateActionResponse(
+        res_b = SarathiEvaluateResponse(
+            execution_id="corr-2",
             risk_score=0.9,
-            enforcement_decision=EnforcementDecision.DENY,
+            sarathi_decision=SarathiDecision.DENY,
             confidence=0.9,
             failure_reason="test",
             trace_hash="b" * 64,
         )
         
-        record_decision("corr-1", "ts1", _make_request(), _make_snapshot(), res_a)
-        record_decision("corr-2", "ts2", _make_request(), _make_snapshot(), res_b)
+        record_decision("corr-1", "ts1", _make_request(), res_a)
+        record_decision("corr-2", "ts2", _make_request(), res_b)
         
         entry = get_ledger_entry("b" * 64)
         assert entry is not None
-        assert entry.correlation_id == "corr-2"
+        assert entry.execution_id == "corr-2"
         assert entry.decision == "DENY"
         
         missing = get_ledger_entry("c" * 64)

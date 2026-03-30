@@ -9,6 +9,7 @@ import pytest
 import hashlib
 from app.core_execution_gate import submit_proposal, CoreExecutionResult
 from app.enforcement_schemas import (
+    SarathiDecision,
     EnforcementDecision,
     DGICEpistemicStateInput,
     ContextSignal,
@@ -63,7 +64,7 @@ class TestAllowPath:
     def test_clean_proposal_allows_execution(self):
         """Clean action + KNOWN state → ALLOW, executed=True."""
         result = submit_proposal(
-            proposal_id="prop-001",
+            execution_id="prop-001",
             actor="core-agent",
             proposed_action="Generate daily report",
             context_signals=[],
@@ -71,10 +72,10 @@ class TestAllowPath:
             source_system=SourceSystem.AI_BEING,
         )
         assert isinstance(result, CoreExecutionResult)
-        assert result.execution_decision == EnforcementDecision.ALLOW
+        assert result.execution_decision == SarathiDecision.ALLOW
         assert result.executed is True
-        assert result.gate_decision == EnforcementDecision.ALLOW
-        assert result.proposal_id == "prop-001"
+        assert result.gate_decision == SarathiDecision.ALLOW
+        assert result.execution_id == "prop-001"
         assert len(result.trace_hash) == 64
 
 
@@ -89,7 +90,7 @@ class TestBlockPath:
             ContextSignal(signal_id="threat-1", signal_type="security_alert", value=0.85, source="INSIGHTBRIDGE"),
         ]
         result = submit_proposal(
-            proposal_id="prop-002",
+            execution_id="prop-002",
             actor="core-agent",
             proposed_action="Execute system override",
             context_signals=signals,
@@ -98,7 +99,7 @@ class TestBlockPath:
         )
         assert result.execution_decision == EnforcementDecision.BLOCK
         assert result.executed is False
-        assert result.gate_decision == EnforcementDecision.DENY
+        assert result.gate_decision == SarathiDecision.DENY
         assert result.failure_reason is not None
 
     def test_tampered_dgic_seal_blocks(self):
@@ -109,7 +110,7 @@ class TestBlockPath:
         tampered = DGICEpistemicStateInput(**dgic_dict)
         
         result = submit_proposal(
-            proposal_id="prop-003",
+            execution_id="prop-003",
             actor="core-agent",
             proposed_action="Normal action",
             context_signals=[],
@@ -118,13 +119,13 @@ class TestBlockPath:
         )
         assert result.execution_decision == EnforcementDecision.BLOCK
         assert result.executed is False
-        assert result.gate_decision == EnforcementDecision.ABSTAIN
+        assert result.gate_decision == SarathiDecision.ABSTAIN
 
     def test_critical_entropy_blocks(self):
         """CRITICAL entropy boundary → DENY → BLOCK."""
         dgic = _make_dgic_state(epistemic_state="INFERRED", entropy_score=0.8)
         result = submit_proposal(
-            proposal_id="prop-004",
+            execution_id="prop-004",
             actor="core-agent",
             proposed_action="Run system diagnostic",
             context_signals=[],
@@ -147,7 +148,7 @@ class TestEscalatePath:
             ContextSignal(signal_id="s1", signal_type="anomaly", value=0.4, source="sensor-a"),
         ]
         result = submit_proposal(
-            proposal_id="prop-005",
+            execution_id="prop-005",
             actor="core-agent",
             proposed_action="Execute navigation correction",
             context_signals=signals,
@@ -156,7 +157,7 @@ class TestEscalatePath:
         )
         assert result.execution_decision == EnforcementDecision.ESCALATE
         assert result.executed is False
-        assert result.gate_decision == EnforcementDecision.DENY
+        assert result.gate_decision == SarathiDecision.DENY
         assert "ambiguous" in result.failure_reason.lower() or "uncertainty" in result.failure_reason.lower()
 
 
@@ -169,7 +170,7 @@ class TestRequestMoreDataPath:
         """UNKNOWN epistemic state → ABSTAIN → REQUEST_MORE_DATA."""
         dgic = _make_dgic_state(epistemic_state="UNKNOWN", entropy_score=0.0)
         result = submit_proposal(
-            proposal_id="prop-006",
+            execution_id="prop-006",
             actor="core-agent",
             proposed_action="Run diagnostic scan",
             context_signals=[],
@@ -178,7 +179,7 @@ class TestRequestMoreDataPath:
         )
         assert result.execution_decision == EnforcementDecision.REQUEST_MORE_DATA
         assert result.executed is False
-        assert result.gate_decision == EnforcementDecision.ABSTAIN
+        assert result.gate_decision == SarathiDecision.ABSTAIN
 
 
 # ============================================================
@@ -189,7 +190,7 @@ class TestDecisionLogging:
     def test_allow_decision_logged(self):
         """ALLOW decisions are recorded in the ledger."""
         submit_proposal(
-            proposal_id="log-001",
+            execution_id="log-001",
             actor="core-agent",
             proposed_action="Generate report",
             context_signals=[],
@@ -198,12 +199,12 @@ class TestDecisionLogging:
         )
         entries = get_ledger_entries()
         assert len(entries) >= 1
-        assert entries[-1].action_id == "log-001"
+        assert entries[-1].execution_id == "log-001"
 
     def test_block_decision_logged(self):
         """BLOCK decisions are recorded in the ledger."""
         submit_proposal(
-            proposal_id="log-002",
+            execution_id="log-002",
             actor="core-agent",
             proposed_action="kill everyone and destroy the building with explosives and attack",
             context_signals=[],
@@ -211,7 +212,7 @@ class TestDecisionLogging:
             source_system=SourceSystem.AI_BEING,
         )
         entries = get_ledger_entries()
-        assert any(e.action_id == "log-002" for e in entries)
+        assert any(e.execution_id == "log-002" for e in entries)
 
 
 # ============================================================
@@ -222,14 +223,14 @@ class TestResponseStructure:
     def test_response_has_all_fields(self):
         """CoreExecutionResult contains all required fields."""
         result = submit_proposal(
-            proposal_id="struct-001",
+            execution_id="struct-001",
             actor="core-agent",
             proposed_action="Test action",
             context_signals=[],
             dgic_epistemic_state=_make_dgic_state(),
             source_system=SourceSystem.AI_BEING,
         )
-        assert isinstance(result.proposal_id, str)
+        assert isinstance(result.execution_id, str)
         assert isinstance(result.execution_decision, EnforcementDecision)
         assert isinstance(result.executed, bool)
         assert isinstance(result.risk_score, float)

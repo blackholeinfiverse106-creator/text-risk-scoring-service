@@ -44,7 +44,7 @@ def test_telemetry_event_fields():
     sig = _make_signal("s1", SignalType.TEXT_RISK_SIGNAL, 0.6, 0.9, EpistemicState.KNOWN)
     agg = aggregate_unified_signals([sig])
     envelope = wrap_in_dgic_envelope(agg)
-    event = emit_telemetry_event(envelope)
+    event = emit_telemetry_event("exec-1", envelope)
 
     assert isinstance(event, InsightBridgeTelemetryEvent)
     assert event.signal_source == "multi_signal_aggregator"
@@ -61,7 +61,7 @@ def test_telemetry_dict_format():
     sig = _make_signal("s1", SignalType.POLICY_VIOLATION_SIGNAL, 0.8, 1.0, EpistemicState.KNOWN)
     agg = aggregate_unified_signals([sig])
     envelope = wrap_in_dgic_envelope(agg)
-    result = emit_telemetry_dict(envelope)
+    result = emit_telemetry_dict("exec-1", envelope)
 
     assert isinstance(result, dict)
     required_keys = {"signal_id", "signal_source", "confidence", "timestamp", "lineage_reference", "risk_score", "signal_count", "collapse_state"}
@@ -72,7 +72,7 @@ def test_telemetry_collapsed_state():
     sig = _make_signal("s1", SignalType.TEXT_RISK_SIGNAL, 0.8, 1.0, EpistemicState.UNKNOWN)
     agg = aggregate_unified_signals([sig])
     envelope = wrap_in_dgic_envelope(agg)
-    event = emit_telemetry_event(envelope)
+    event = emit_telemetry_event("exec-2", envelope)
 
     assert event.collapse_state == "COLLAPSED"
     assert event.risk_score == 0.0
@@ -82,6 +82,6 @@ def test_telemetry_deterministic_signal_id():
     sig = _make_signal("s1", SignalType.TEXT_RISK_SIGNAL, 0.5, 1.0, EpistemicState.KNOWN)
     agg = aggregate_unified_signals([sig])
     envelope = wrap_in_dgic_envelope(agg)
-    e1 = emit_telemetry_event(envelope)
-    e2 = emit_telemetry_event(envelope)
+    e1 = emit_telemetry_event("exec-3", envelope)
+    e2 = emit_telemetry_event("exec-3", envelope)
     assert e1.signal_id == e2.signal_id  # Same envelope → same signal_id

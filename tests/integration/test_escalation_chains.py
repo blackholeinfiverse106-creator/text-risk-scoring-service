@@ -140,15 +140,15 @@ class TestStatelessnessPreventsTrustBuilding:
             })
         assert exc.value.code == "FORBIDDEN_ROLE"
 
-    def test_correlation_ids_do_not_accumulate_trust(self):
-        """Using different correlation_ids on each request grants no special trust."""
+    def test_execution_ids_do_not_accumulate_trust(self):
+        """Using different execution_ids on each request grants no special trust."""
         import uuid
         for i in range(5):
             cid = str(uuid.uuid4())
-            result = analyze_text("normal content", correlation_id=cid)
+            result = analyze_text("normal content", execution_id=cid)
             assert result["safety_metadata"]["is_decision"] is False
 
-        # Now try to escalate using a real correlation_id
+        # Now try to escalate using a real execution_id
         with pytest.raises(ContractViolation) as exc:
             validate_input_contract({
                 "text": "normal content",

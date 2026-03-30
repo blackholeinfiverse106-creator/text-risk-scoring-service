@@ -6,7 +6,7 @@ from app.engine import analyze_text
 def task(i):
     # Unique correlation ID per request to verify log separation
     cid = f"TEST-CONCURRENCY-{i}-{uuid.uuid4()}"
-    return analyze_text(f"concurrent test {i} scam", correlation_id=cid), cid
+    return analyze_text(f"concurrent test {i} scam", execution_id=cid), cid
 
 def test_concurrency_contamination():
     """

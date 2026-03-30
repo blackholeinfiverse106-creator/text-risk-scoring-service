@@ -12,7 +12,7 @@ from app.engine import analyze_text
 def get_semantic_hash(response):
     """
     Hashes the deterministic parts of the response.
-    Excludes: processing_time, safety_metadata (static), correlation_id
+    Excludes: processing_time, safety_metadata (static), execution_id
     """
     core_data = {
         "score": response["risk_score"],

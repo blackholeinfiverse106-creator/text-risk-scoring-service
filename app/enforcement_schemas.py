@@ -35,6 +35,15 @@ class SourceSystem(str, Enum):
 # Enforcement Decision Enum
 # ============================================================
 
+class SarathiDecision(str, Enum):
+    """
+    The authoritative governance decision made by the Sarathi layer.
+    """
+    ALLOW = "ALLOW"
+    DENY = "DENY"
+    ABSTAIN = "ABSTAIN"
+
+
 class EnforcementDecision(str, Enum):
     """
     The deterministic enforcement decision.
@@ -141,11 +150,11 @@ class EvaluateActionRequest(BaseModel):
     The canonical enforcement evaluation request.
     All BHIV systems submit proposed actions through this schema.
     """
-    action_id: str = Field(
+    execution_id: str = Field(
         ...,
         min_length=1,
         max_length=128,
-        description="Unique identifier for the proposed action"
+        description="Global unique identifier for the execution pipeline"
     )
     actor: str = Field(
         ...,
@@ -178,21 +187,27 @@ class EvaluateActionRequest(BaseModel):
 # Evaluate Action Response
 # ============================================================
 
-class EvaluateActionResponse(BaseModel):
+class SarathiEvaluateResponse(BaseModel):
     """
-    The canonical enforcement evaluation response.
+    The canonical governance evaluation response from Sarathi.
     Every field is deterministic and serializable.
     No unstructured output is permitted.
     """
+    execution_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=128,
+        description="Global unique identifier for this evaluation"
+    )
     risk_score: float = Field(
         ...,
         ge=0.0,
         le=1.0,
         description="Final computed risk score [0.0, 1.0]"
     )
-    enforcement_decision: EnforcementDecision = Field(
+    sarathi_decision: SarathiDecision = Field(
         ...,
-        description="ALLOW, DENY, or ABSTAIN — deterministic gate decision"
+        description="ALLOW, DENY, or ABSTAIN — authoritarian governance decision"
     )
     confidence: float = Field(
         ...,
@@ -209,4 +224,48 @@ class EvaluateActionResponse(BaseModel):
         min_length=64,
         max_length=64,
         description="SHA-256 of all inputs — deterministic replay verification key"
+    )
+
+
+# ============================================================
+# Execute Action Request (For Enforcement Gate)
+# ============================================================
+
+class ExecuteActionRequest(BaseModel):
+    """
+    The canonical enforcement request sent to the Execution Gate,
+    carrying the explicit, approved Sarathi decision.
+    """
+    execution_id: str = Field(..., max_length=128, description="Global specific execution ID")
+    actor: str = Field(..., max_length=256)
+    source_system: SourceSystem
+    sarathi_response: SarathiEvaluateResponse = Field(
+        ...,
+        description="The authoritative governance decision from Sarathi"
+    )
+
+
+# ============================================================
+# Execute Action Response
+# ============================================================
+
+class ExecuteActionResponse(BaseModel):
+    """
+    The final executed response showing if the gate allowed it.
+    """
+    execution_id: str = Field(
+        ...,
+        description="Global execution ID tracked through the enforcement pipeline"
+    )
+    enforcement_decision: EnforcementDecision = Field(
+        ...,
+        description="The final gate decision (e.g. ALLOW, DENY, BLOCK)"
+    )
+    executed: bool = Field(
+        ...,
+        description="True ONLY if the enforcement gate permitted execution"
+    )
+    trace_hash: str = Field(
+        ...,
+        description="The trace hash of the Sarathi evaluation"
     )

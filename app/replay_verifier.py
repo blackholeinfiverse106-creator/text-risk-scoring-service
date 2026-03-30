@@ -4,27 +4,23 @@ Replay Verifier
 Deterministic replay verification tool for the enforcement bucket ledger.
 
 Re-evaluates historical enforcement decisions using the stored request payload
-and verifies that the output is byte-identical to the original decision.
-
-This proves:
-  1. The enforcement gate is deterministic (same inputs → same output)
-  2. The bucket entry was not tampered with (replay_proof check)
+from the external Primary_Bucket_Owner service and verifies that the output 
+is byte-identical to the original decision.
 """
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from app.bucket_ledger import (
-    BucketEntry,
-    compute_replay_proof,
+    compute_artifact_hash,
     get_bucket_entries,
     get_bucket_entry,
 )
-from app.enforcement_schemas import EvaluateActionRequest, EnforcementDecision
-from app.enforcement_gate import evaluate_action
+from app.enforcement_schemas import EvaluateActionRequest
+from app.sarathi_governance import evaluate_action
 
 logger = logging.getLogger(__name__)
 
@@ -36,16 +32,16 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class ReplayResult:
     """
-    Result of replaying a single bucket entry.
+    Result of replaying a single bucket entry (artifact).
     """
-    bucket_id: str
+    bucket_id: str           # Actually execution_id now
     trace_hash: str
     original_decision: str
     replayed_decision: str
     original_risk_score: float
     replayed_risk_score: float
     match: bool              # True if decisions are byte-identical
-    replay_proof_valid: bool  # True if stored replay_proof matches recomputed
+    replay_proof_valid: bool  # True if stored artifact_hash matches recomputed
     error: Optional[str]     # None if no error occurred
 
 
@@ -53,53 +49,55 @@ class ReplayResult:
 # Single Entry Verification
 # ============================================================
 
-def verify_bucket_entry(entry: BucketEntry) -> ReplayResult:
+def verify_bucket_entry(artifact: Dict[str, Any]) -> ReplayResult:
     """
-    Replay-verify a single bucket entry.
+    Replay-verify a single bucket artifact from the external Bucket Service.
+    """
+    execution_id = artifact.get("artifact_id", "UNKNOWN")
+    payload = artifact.get("payload", {})
+    
+    trace_hash = payload.get("trace_hash", "UNKNOWN")
+    original_decision = payload.get("decision", "UNKNOWN")
+    original_risk_score = payload.get("risk_score", 0.0)
 
-    Steps:
-      1. Verify the replay_proof (tamper detection on the stored entry)
-      2. Reconstruct the EvaluateActionRequest from stored payload
-      3. Re-evaluate through the enforcement gate
-      4. Compare original decision to replayed decision
-    """
-    # Step 1: Verify replay proof (tamper detection)
-    entry_dict = {
-        "bucket_id": entry.bucket_id,
-        "action_id": entry.action_id,
-        "timestamp_utc": entry.timestamp_utc,
-        "input_snapshot_hash": entry.input_snapshot_hash,
-        "request_payload": entry.request_payload,
-        "dgic_snapshot": entry.dgic_snapshot,
-        "decision": entry.decision,
-        "risk_score": entry.risk_score,
-        "confidence": entry.confidence,
-        "failure_reason": entry.failure_reason,
-        "trace_hash": entry.trace_hash,
-        "trace_lineage": entry.trace_lineage,
-    }
-    recomputed_proof = compute_replay_proof(entry_dict)
-    replay_proof_valid = recomputed_proof == entry.replay_proof
+    # Step 1: Verify replay proof / artifact hash
+    recomputed_hash = compute_artifact_hash(artifact)
+    stored_hash = artifact.get("artifact_hash", "")
+    replay_proof_valid = recomputed_hash == stored_hash
 
     if not replay_proof_valid:
         logger.warning(
-            f"Replay proof INVALID for bucket {entry.bucket_id[:8]}...",
+            f"Artifact hash mismatch for execution {execution_id}",
             extra={
                 "event_type": "replay_proof_invalid",
-                "bucket_id": entry.bucket_id,
+                "execution_id": execution_id,
             },
         )
 
-    # Step 2: Reconstruct EvaluateActionRequest from stored payload
+    # Step 2: Reconstruct EvaluateActionRequest
+    request_payload = payload.get("request_payload")
+    if not request_payload:
+        return ReplayResult(
+            bucket_id=execution_id,
+            trace_hash=trace_hash,
+            original_decision=original_decision,
+            replayed_decision="ERROR",
+            original_risk_score=original_risk_score,
+            replayed_risk_score=0.0,
+            match=False,
+            replay_proof_valid=replay_proof_valid,
+            error="Missing request_payload in artifact",
+        )
+
     try:
-        request = EvaluateActionRequest(**entry.request_payload)
+        request = EvaluateActionRequest(**request_payload)
     except Exception as e:
         return ReplayResult(
-            bucket_id=entry.bucket_id,
-            trace_hash=entry.trace_hash,
-            original_decision=entry.decision,
+            bucket_id=execution_id,
+            trace_hash=trace_hash,
+            original_decision=original_decision,
             replayed_decision="ERROR",
-            original_risk_score=entry.risk_score,
+            original_risk_score=original_risk_score,
             replayed_risk_score=0.0,
             match=False,
             replay_proof_valid=replay_proof_valid,
@@ -111,11 +109,11 @@ def verify_bucket_entry(entry: BucketEntry) -> ReplayResult:
         replayed_response = evaluate_action(request)
     except Exception as e:
         return ReplayResult(
-            bucket_id=entry.bucket_id,
-            trace_hash=entry.trace_hash,
-            original_decision=entry.decision,
+            bucket_id=execution_id,
+            trace_hash=trace_hash,
+            original_decision=original_decision,
             replayed_decision="ERROR",
-            original_risk_score=entry.risk_score,
+            original_risk_score=original_risk_score,
             replayed_risk_score=0.0,
             match=False,
             replay_proof_valid=replay_proof_valid,
@@ -123,19 +121,19 @@ def verify_bucket_entry(entry: BucketEntry) -> ReplayResult:
         )
 
     # Step 4: Compare decisions
-    replayed_decision = replayed_response.enforcement_decision.value
+    replayed_decision = replayed_response.sarathi_decision.value
     match = (
-        entry.decision == replayed_decision
-        and entry.risk_score == replayed_response.risk_score
-        and entry.trace_hash == replayed_response.trace_hash
+        original_decision == replayed_decision
+        and original_risk_score == replayed_response.risk_score
+        and trace_hash == replayed_response.trace_hash
     )
 
     result = ReplayResult(
-        bucket_id=entry.bucket_id,
-        trace_hash=entry.trace_hash,
-        original_decision=entry.decision,
+        bucket_id=execution_id,
+        trace_hash=trace_hash,
+        original_decision=original_decision,
         replayed_decision=replayed_decision,
-        original_risk_score=entry.risk_score,
+        original_risk_score=original_risk_score,
         replayed_risk_score=replayed_response.risk_score,
         match=match,
         replay_proof_valid=replay_proof_valid,
@@ -143,14 +141,12 @@ def verify_bucket_entry(entry: BucketEntry) -> ReplayResult:
     )
 
     logger.info(
-        f"Replay verification: {'PASS' if match else 'FAIL'} | bucket={entry.bucket_id[:8]}...",
+        f"Replay verification: {'PASS' if match else 'FAIL'} | execution_id={execution_id}",
         extra={
             "event_type": "replay_verification",
-            "bucket_id": entry.bucket_id,
+            "execution_id": execution_id,
             "match": match,
             "replay_proof_valid": replay_proof_valid,
-            "original_decision": entry.decision,
-            "replayed_decision": replayed_decision,
         },
     )
 
@@ -163,11 +159,16 @@ def verify_bucket_entry(entry: BucketEntry) -> ReplayResult:
 
 def verify_all() -> List[ReplayResult]:
     """
-    Replay-verify ALL entries in the bucket ledger.
-    Returns a list of ReplayResults for each entry.
+    Replay-verify ALL entries fetched from the external Bucket.
     """
     entries = get_bucket_entries()
     results = []
+    # Currently get_bucket_entries returns a list of artifacts OR {"artifacts": [...]} depending on schema
+    if isinstance(entries, dict) and "items" in entries:
+        entries = entries["items"]
+    elif isinstance(entries, dict) and "artifacts" in entries:
+        entries = entries["artifacts"]
+        
     for entry in entries:
         result = verify_bucket_entry(entry)
         results.append(result)
@@ -176,10 +177,20 @@ def verify_all() -> List[ReplayResult]:
 
 def verify_by_trace_hash(trace_hash: str) -> Optional[ReplayResult]:
     """
-    Replay-verify a specific bucket entry by its trace hash.
-    Returns None if not found.
+    We don't natively index by trace_hash in external bucket (indexed by artifact_id).
+    We must scan for trace_hash match or assume trace_hash == artifact_id 
+    in the new routing model.
     """
-    entry = get_bucket_entry(trace_hash)
-    if entry is None:
-        return None
-    return verify_bucket_entry(entry)
+    # Just fall back to scanning if not found
+    entries = get_bucket_entries()
+    if isinstance(entries, dict) and "artifacts" in entries:
+        entries = entries["artifacts"]
+    elif isinstance(entries, dict) and "items" in entries:
+        entries = entries["items"]
+
+    for entry in entries:
+        payload = entry.get("payload", {})
+        if payload.get("trace_hash") == trace_hash or entry.get("artifact_id") == trace_hash:
+            return verify_bucket_entry(entry)
+    
+    return None

@@ -42,7 +42,9 @@ class InsightBridgeTelemetryEvent:
         risk_score          : Aggregate risk score.
         signal_count        : Number of input signals aggregated.
         collapse_state      : STABLE | DEGRADED | COLLAPSED from DGIC envelope.
+        execution_id        : Global unique execution ID trace.
     """
+    execution_id: str
     signal_id: str
     signal_source: str
     confidence: float
@@ -70,7 +72,7 @@ def _compute_telemetry_signal_id(envelope: DGICEnforcementEnvelope) -> str:
 # Telemetry Emission
 # ============================================================
 
-def emit_telemetry_event(envelope: DGICEnforcementEnvelope) -> InsightBridgeTelemetryEvent:
+def emit_telemetry_event(execution_id: str, envelope: DGICEnforcementEnvelope) -> InsightBridgeTelemetryEvent:
     """
     Build and emit a structured telemetry event from a DGIC enforcement envelope.
 
@@ -83,6 +85,7 @@ def emit_telemetry_event(envelope: DGICEnforcementEnvelope) -> InsightBridgeTele
     timestamp = datetime.now(timezone.utc).isoformat()
 
     event = InsightBridgeTelemetryEvent(
+        execution_id=execution_id,
         signal_id=signal_id,
         signal_source="multi_signal_aggregator",
         confidence=envelope.epistemic_confidence,
@@ -105,10 +108,10 @@ def emit_telemetry_event(envelope: DGICEnforcementEnvelope) -> InsightBridgeTele
     return event
 
 
-def emit_telemetry_dict(envelope: DGICEnforcementEnvelope) -> dict:
+def emit_telemetry_dict(execution_id: str, envelope: DGICEnforcementEnvelope) -> dict:
     """
     Convenience wrapper: emit telemetry and return as a plain dict
     for JSON serialisation in API responses.
     """
-    event = emit_telemetry_event(envelope)
+    event = emit_telemetry_event(execution_id, envelope)
     return asdict(event)

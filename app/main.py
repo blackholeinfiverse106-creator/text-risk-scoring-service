@@ -14,8 +14,11 @@ from app.unified_schemas import UnifiedAggregateRequest, UnifiedSignalInput
 from app.signal_aggregator import aggregate_unified_signals, UnifiedSignal, SignalType
 from app.dgic_enforcement_bridge import wrap_in_dgic_envelope
 from app.insightbridge_telemetry import emit_telemetry_dict
-from app.enforcement_schemas import EvaluateActionRequest, EvaluateActionResponse
-from app.enforcement_gate import evaluate_action
+from app.sutradhara_control_plane import invoke_agent, AgentVerificationError
+from app.enforcement_schemas import ContextSignal, DGICEpistemicStateInput
+from fastapi import HTTPException
+from pydantic import BaseModel as _CoreBaseModel
+from typing import Optional
 
 
 # Initialize JSON logging
@@ -34,26 +37,26 @@ app.add_middleware(
 
 @app.post("/analyze", response_model=OutputSchema)
 def analyze(payload: InputSchema):
-    correlation_id = str(uuid.uuid4())[:8]
-    logger.info("Request received", extra={"correlation_id": correlation_id, "event_type": "analysis_request"})
+    execution_id = f"exec-{uuid.uuid4().hex[:12]}"
+    logger.info("Request received", extra={"execution_id": execution_id, "event_type": "analysis_request"})
     
     try:
         request_data = payload.dict()
-        logger.debug("Input validation starting", extra={"correlation_id": correlation_id, "event_type": "contract_enforcement"})
+        logger.debug("Input validation starting", extra={"execution_id": execution_id, "event_type": "contract_enforcement"})
         
         text = validate_input_contract(request_data)
-        logger.info(f"Input validated | length={len(text)}", extra={"correlation_id": correlation_id, "event_type": "contract_passed", "details": {"length": len(text)}})
+        logger.info(f"Input validated | length={len(text)}", extra={"execution_id": execution_id, "event_type": "contract_passed", "details": {"length": len(text)}})
         
-        response = analyze_text(text, correlation_id=correlation_id)
-        logger.info(f"Analysis complete | risk={response['risk_category']}", extra={"correlation_id": correlation_id, "event_type": "engine_success", "details": {"risk": response['risk_category']}})
+        response = analyze_text(text, correlation_id=execution_id)
+        logger.info(f"Analysis complete | risk={response['risk_category']}", extra={"execution_id": execution_id, "event_type": "engine_success", "details": {"risk": response['risk_category']}})
         
         validate_output_contract(response)
-        logger.debug("Output validated", extra={"correlation_id": correlation_id, "event_type": "contract_enforcement_passed"})
+        logger.debug("Output validated", extra={"execution_id": execution_id, "event_type": "contract_enforcement_passed"})
         
         return response
         
     except ContractViolation as e:
-        logger.warning(f"Contract violation | code={e.code}", extra={"correlation_id": correlation_id, "event_type": "input_validation_failed", "details": {"code": e.code, "why": e.message}})
+        logger.warning(f"Contract violation | code={e.code}", extra={"execution_id": execution_id, "event_type": "input_validation_failed", "details": {"code": e.code, "why": e.message}})
         return {
             "risk_score": 0.0,
             "confidence_score": 0.0,
@@ -71,7 +74,7 @@ def analyze(payload: InputSchema):
             }
         }
     except Exception as e:
-        logger.error(f"Unexpected error | correlation_id={correlation_id} | event_type=unhandled_exception | why={str(e)}", exc_info=True)
+        logger.error(f"Unexpected error | execution_id={execution_id} | event_type=unhandled_exception | why={str(e)}", exc_info=True)
         return {
             "risk_score": 0.0,
             "confidence_score": 0.0,
@@ -91,21 +94,21 @@ def analyze(payload: InputSchema):
 
 @app.post("/api/v1/dgic/ingest")
 def dgic_ingest(payload: DGICIngestRequest):
-    correlation_id = str(uuid.uuid4())[:8]
-    logger.info("DGIC envelope received", extra={"correlation_id": correlation_id, "event_type": "dgic_ingest"})
+    execution_id = f"exec-{uuid.uuid4().hex[:12]}"
+    logger.info("DGIC envelope received", extra={"execution_id": execution_id, "event_type": "dgic_ingest"})
     try:
         dgic_input = validate_dgic_input(payload.dgic_envelope)
-        base_result = analyze_text(payload.text, correlation_id=correlation_id)
+        base_result = analyze_text(payload.text, correlation_id=execution_id)
         final_result = apply_dgic_modifiers(base_result, adapter_result=adapt_dgic(dgic_input))
         return final_result
     except DGICContractViolation as e:
-        logger.warning(f"DGIC Contract violation | code={e.code}", extra={"correlation_id": correlation_id, "details": {"why": e.message}})
+        logger.warning(f"DGIC Contract violation | code={e.code}", extra={"execution_id": execution_id, "details": {"why": e.message}})
         return {"error": e.message, "error_code": e.code}
 
 @app.post("/api/v1/aggregate")
 def aggregate_endpoint(payload: AggregateRequest):
-    correlation_id = str(uuid.uuid4())[:8]
-    logger.info("Aggregation request received", extra={"correlation_id": correlation_id, "event_type": "aggregation"})
+    execution_id = f"exec-{uuid.uuid4().hex[:12]}"
+    logger.info("Aggregation request received", extra={"execution_id": execution_id, "event_type": "aggregation"})
     try:
         if not payload.signals:
             return {"error": "No signals provided"}
@@ -125,8 +128,8 @@ def aggregate_endpoint(payload: AggregateRequest):
 
 @app.post("/api/v1/aggregate/unified")
 def aggregate_unified_endpoint(payload: UnifiedAggregateRequest):
-    correlation_id = str(uuid.uuid4())[:8]
-    logger.info("Unified aggregation request received", extra={"correlation_id": correlation_id, "event_type": "unified_aggregation"})
+    execution_id = f"exec-{uuid.uuid4().hex[:12]}"
+    logger.info("Unified aggregation request received", extra={"execution_id": execution_id, "event_type": "unified_aggregation"})
     try:
         if not payload.signals:
             return {"error": "No signals provided"}
@@ -151,7 +154,7 @@ def aggregate_unified_endpoint(payload: UnifiedAggregateRequest):
         dgic_envelope = wrap_in_dgic_envelope(agg_result)
         
         # Day 2B: Emit InsightBridge telemetry event
-        telemetry = emit_telemetry_dict(dgic_envelope)
+        telemetry = emit_telemetry_dict(execution_id, dgic_envelope)
         
         # Map to InsightBridge contract
         lineage_hash = unified_signals[0].dgic_envelope.lineage_hash if unified_signals else "none"
@@ -173,119 +176,62 @@ def aggregate_unified_endpoint(payload: UnifiedAggregateRequest):
 
 
 # ============================================================
-# Canonical Enforcement Gateway Endpoint
+# Sūtradhāra Control Plane Endpoint (Layer 2)
 # ============================================================
 
-@app.post("/api/v1/enforce/evaluate_action", response_model=EvaluateActionResponse)
-def enforce_evaluate_action(payload: EvaluateActionRequest):
-    """
-    The deterministic enforcement gate for all BHIV systems.
-    All proposed actions MUST pass through this endpoint before execution.
-    """
-    correlation_id = str(uuid.uuid4())[:8]
-    logger.info(
-        "Enforcement evaluation request received",
-        extra={
-            "correlation_id": correlation_id,
-            "event_type": "enforcement_request",
-            "action_id": payload.action_id,
-            "source_system": payload.source_system.value,
-        },
-    )
-    try:
-        result = evaluate_action(payload)
-        logger.info(
-            f"Enforcement result: {result.enforcement_decision}",
-            extra={
-                "correlation_id": correlation_id,
-                "event_type": "enforcement_result",
-                "decision": result.enforcement_decision,
-                "risk_score": result.risk_score,
-                "trace_hash": result.trace_hash,
-            },
-        )
-        return result
-    except Exception as e:
-        logger.error(
-            "Enforcement evaluation error",
-            exc_info=True,
-            extra={"correlation_id": correlation_id, "event_type": "enforcement_error"},
-        )
-        return EvaluateActionResponse(
-            risk_score=0.0,
-            enforcement_decision="ABSTAIN",
-            confidence=0.0,
-            failure_reason=f"Internal enforcement error: {str(e)}",
-            trace_hash="0" * 64,
-        )
+from app.core_execution_gate import CoreExecutionResult
 
-
-# ============================================================
-# Core Execution Gate Endpoint
-# ============================================================
-
-from app.core_execution_gate import submit_proposal, CoreExecutionResult
-from app.enforcement_schemas import DGICEpistemicStateInput, ContextSignal, SourceSystem
-from pydantic import BaseModel as _CoreBaseModel
-
-class CoreProposalRequest(_CoreBaseModel):
-    """API-level request for Core action proposals."""
-    proposal_id: str
+class SutradharaInvokeRequest(_CoreBaseModel):
+    """API-level request for Agent invocations."""
+    execution_id: Optional[str] = None
     actor: str
     proposed_action: str
     context_signals: list[ContextSignal] = []
     dgic_epistemic_state: DGICEpistemicStateInput
-    source_system: SourceSystem
+    source_system: str  # String representation, dynamically validated by registry
 
-@app.post("/api/v1/core/submit_proposal", response_model=CoreExecutionResult)
-def core_submit_proposal(payload: CoreProposalRequest):
+
+@app.post("/api/v1/sutradhara/invoke", response_model=CoreExecutionResult)
+def sutradhara_invoke(payload: SutradharaInvokeRequest):
     """
-    Core execution gate. Submit an action proposal for enforcement evaluation.
-    Execution occurs ONLY if the decision is ALLOW.
+    The exclusive operational entry-point for all BHIV agents.
+    Control Plane (Layer 2) routing ensures agent registration verification
+    before descending into Sarathi Governance (Layer 1) and Core Execution/Enforcement (Layer 4).
     """
-    correlation_id = str(uuid.uuid4())[:8]
     logger.info(
-        "Core proposal received",
+        "Sūtradhāra invocation requested",
         extra={
-            "correlation_id": correlation_id,
-            "event_type": "core_proposal_received",
-            "proposal_id": payload.proposal_id,
-            "source_system": payload.source_system.value,
+            "event_type": "sutradhara_api_request",
+            "execution_id": payload.execution_id or "unassigned",
+            "source_system": payload.source_system,
         },
     )
     try:
-        result = submit_proposal(
-            proposal_id=payload.proposal_id,
+        result = invoke_agent(
+            source_system=payload.source_system,
             actor=payload.actor,
             proposed_action=payload.proposed_action,
-            context_signals=payload.context_signals,
             dgic_epistemic_state=payload.dgic_epistemic_state,
-            source_system=payload.source_system,
-        )
-        logger.info(
-            f"Core result: {result.execution_decision} | executed={result.executed}",
-            extra={
-                "correlation_id": correlation_id,
-                "event_type": "core_result",
-                "decision": result.execution_decision,
-                "executed": result.executed,
-                "trace_hash": result.trace_hash,
-            },
+            context_signals=payload.context_signals,
+            execution_id=payload.execution_id,
         )
         return result
+    except AgentVerificationError as e:
+        logger.error(f"Sūtradhāra registration breach: {str(e)}")
+        raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         logger.error(
-            "Core proposal error",
+            "Sūtradhāra invocation failed",
             exc_info=True,
-            extra={"correlation_id": correlation_id, "event_type": "core_error"},
+            extra={"event_type": "sutradhara_error"},
         )
         return CoreExecutionResult(
-            proposal_id=payload.proposal_id,
+            execution_id=payload.execution_id or "sys-failure",
             execution_decision="BLOCK",
             executed=False,
             risk_score=0.0,
             confidence=0.0,
-            failure_reason=f"Internal error: {str(e)}",
+            failure_reason=f"Internal Control Plane Error: {str(e)}",
             trace_hash="0" * 64,
             gate_decision="ABSTAIN",
         )
@@ -294,7 +240,7 @@ def core_submit_proposal(payload: CoreProposalRequest):
 # Bucket Ledger + Replay Verification Endpoints
 # ============================================================
 
-from app.bucket_ledger import get_bucket_entries, get_bucket_entry, BucketEntry
+from app.bucket_ledger import get_bucket_entries, get_bucket_entry
 from app.replay_verifier import verify_by_trace_hash, verify_all, ReplayResult
 from dataclasses import asdict as _asdict
 
@@ -302,7 +248,9 @@ from dataclasses import asdict as _asdict
 def bucket_list_entries():
     """List all enforcement bucket entries."""
     entries = get_bucket_entries()
-    return [_asdict(e) for e in entries]
+    # Support pagination dict or direct list list
+    items = entries.get("items", []) if isinstance(entries, dict) else entries
+    return items
 
 @app.post("/api/v1/bucket/replay/{trace_hash}")
 def bucket_replay_entry(trace_hash: str):

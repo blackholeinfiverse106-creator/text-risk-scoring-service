@@ -39,7 +39,7 @@ def error_response(code: str, message: str) -> Dict[str, Any]:
         "errors": {"error_code": code, "message": message},
     }
 
-def analyze_text(text: str, correlation_id: str = "UNKNOWN") -> Dict[str, Any]:
+def analyze_text(text: str, execution_id: str = "UNKNOWN") -> Dict[str, Any]:
     """
     BROKEN VERSION: Adds a small random float to risk_score.
     This simulates a hidden non-deterministic state leak.

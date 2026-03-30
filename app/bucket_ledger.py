@@ -1,17 +1,14 @@
 """
-Bucket Ledger
-==============
-Persistent, append-only enforcement decision ledger backed by JSONL file storage.
+Bucket Ledger Adapter
+=======================
+External adapter for the Primary Bucket Owner service.
 
-Each enforcement evaluation produces a BucketEntry containing:
-  - action_id and bucket_id
-  - input_snapshot_hash (SHA-256 of all inputs)
-  - decision output and risk metrics
-  - trace_hash (deterministic replay key)
-  - trace_lineage (previous bucket → current, forming a chain)
-  - replay_proof (SHA-256 of the full entry for tamper detection)
+This module replaces the internal JSONL persistence layer. It sends synchronous
+HTTP POST requests to the separate Siddhesh-maintained Bucket Service.
 
-Storage format: one JSON object per line in data/enforcement_bucket.jsonl
+Authority Boundary:
+  - This module ONLY adapts formatting and handles the network border.
+  - Failures fail-open (log error, allow execution) as per architecture policy.
 """
 
 from __future__ import annotations
@@ -20,251 +17,38 @@ import hashlib
 import json
 import logging
 import os
-import threading
-import uuid
-from dataclasses import dataclass, asdict
+import requests
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-# ============================================================
-# Constants
-# ============================================================
-
-BUCKET_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "data",
-    "enforcement_bucket.jsonl",
-)
+# External service configuration
+BUCKET_SERVICE_URL = os.environ.get("BUCKET_SERVICE_URL", "http://localhost:8000")
 
 
 # ============================================================
-# Input Snapshot Hash
+# Hash Computation
 # ============================================================
 
-def compute_input_snapshot_hash(
-    request_payload: Dict[str, Any],
-    dgic_snapshot: Dict[str, Any],
-) -> str:
+def compute_artifact_hash(artifact_dict: Dict[str, Any]) -> str:
     """
-    Compute a deterministic SHA-256 hash of ALL enforcement inputs.
-    This proves exactly what data was evaluated.
+    Compute deterministic SHA-256 hash required by the external 
+    Bucket service envelope specification.
     """
-    canonical = {
-        "request": request_payload,
-        "dgic_snapshot": dgic_snapshot,
-    }
-    raw = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-
-# ============================================================
-# Replay Proof
-# ============================================================
-
-def compute_replay_proof(entry_dict: Dict[str, Any]) -> str:
-    """
-    Compute a SHA-256 hash of the full bucket entry (excluding replay_proof itself).
-    Used for tamper detection on stored entries.
-    """
-    # Create a copy without replay_proof to avoid circular hashing
-    proof_input = {k: v for k, v in entry_dict.items() if k != "replay_proof"}
+    # Create copy without artifact_hash to avoid circular hashing
+    proof_input = {k: v for k, v in artifact_dict.items() if k != "artifact_hash"}
     raw = json.dumps(proof_input, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 # ============================================================
-# Bucket Entry
-# ============================================================
-
-@dataclass(frozen=True)
-class BucketEntry:
-    """
-    A single, immutable bucket ledger entry.
-    Contains all information needed for deterministic replay verification.
-    """
-    bucket_id: str
-    action_id: str
-    timestamp_utc: str
-
-    # Input proof
-    input_snapshot_hash: str  # SHA-256 of request + DGIC snapshot
-    request_payload: Dict[str, Any]
-    dgic_snapshot: Dict[str, Any]
-
-    # Decision output
-    decision: str
-    risk_score: float
-    confidence: float
-    failure_reason: Optional[str]
-
-    # Replay infrastructure
-    trace_hash: str          # Deterministic replay key
-    trace_lineage: str       # "GENESIS" or previous bucket_id
-    replay_proof: str        # SHA-256 of this entry for tamper detection
-
-
-# ============================================================
-# Bucket Ledger (File-Persistent, Thread-Safe)
-# ============================================================
-
-class BucketLedger:
-    """
-    Persistent, append-only bucket ledger backed by JSONL file.
-    Thread-safe for concurrent writes.
-    """
-
-    def __init__(self, file_path: str = BUCKET_FILE):
-        self._file_path = file_path
-        self._lock = threading.RLock()
-        self._last_bucket_id: Optional[str] = None
-
-        # Load last bucket_id for trace lineage
-        self._initialize_lineage()
-
-    def _initialize_lineage(self) -> None:
-        """Load the last bucket_id from existing entries for chain continuity."""
-        if os.path.exists(self._file_path):
-            try:
-                entries = self._read_all_raw()
-                if entries:
-                    self._last_bucket_id = entries[-1].get("bucket_id")
-            except Exception:
-                self._last_bucket_id = None
-
-    def write(
-        self,
-        action_id: str,
-        request_payload: Dict[str, Any],
-        dgic_snapshot: Dict[str, Any],
-        decision: str,
-        risk_score: float,
-        confidence: float,
-        failure_reason: Optional[str],
-        trace_hash: str,
-    ) -> BucketEntry:
-        """
-        Write a new bucket entry to the persistent ledger.
-        Automatically computes bucket_id, input_snapshot_hash, trace_lineage, and replay_proof.
-        """
-        bucket_id = str(uuid.uuid4())
-        timestamp_utc = datetime.now(timezone.utc).isoformat()
-
-        # Compute input snapshot hash
-        input_snapshot_hash = compute_input_snapshot_hash(request_payload, dgic_snapshot)
-
-        # Determine trace lineage
-        with self._lock:
-            trace_lineage = self._last_bucket_id or "GENESIS"
-
-        # Build entry dict for replay proof computation (without replay_proof)
-        entry_dict = {
-            "bucket_id": bucket_id,
-            "action_id": action_id,
-            "timestamp_utc": timestamp_utc,
-            "input_snapshot_hash": input_snapshot_hash,
-            "request_payload": request_payload,
-            "dgic_snapshot": dgic_snapshot,
-            "decision": decision,
-            "risk_score": risk_score,
-            "confidence": confidence,
-            "failure_reason": failure_reason,
-            "trace_hash": trace_hash,
-            "trace_lineage": trace_lineage,
-        }
-
-        # Compute replay proof
-        replay_proof = compute_replay_proof(entry_dict)
-
-        # Build frozen entry
-        entry = BucketEntry(
-            bucket_id=bucket_id,
-            action_id=action_id,
-            timestamp_utc=timestamp_utc,
-            input_snapshot_hash=input_snapshot_hash,
-            request_payload=request_payload,
-            dgic_snapshot=dgic_snapshot,
-            decision=decision,
-            risk_score=risk_score,
-            confidence=confidence,
-            failure_reason=failure_reason,
-            trace_hash=trace_hash,
-            trace_lineage=trace_lineage,
-            replay_proof=replay_proof,
-        )
-
-        # Append to file
-        with self._lock:
-            os.makedirs(os.path.dirname(self._file_path), exist_ok=True)
-            with open(self._file_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(asdict(entry), sort_keys=True, separators=(",", ":")) + "\n")
-            self._last_bucket_id = bucket_id
-
-        logger.info(
-            f"Bucket entry written | bucket_id={bucket_id[:8]}...",
-            extra={
-                "event_type": "bucket_write",
-                "bucket_id": bucket_id,
-                "action_id": action_id,
-                "decision": decision,
-                "trace_lineage": trace_lineage[:8] + "..." if trace_lineage != "GENESIS" else "GENESIS",
-            },
-        )
-
-        return entry
-
-    def _read_all_raw(self) -> List[Dict[str, Any]]:
-        """Read all raw JSON entries from the JSONL file."""
-        if not os.path.exists(self._file_path):
-            return []
-        entries = []
-        with open(self._file_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    entries.append(json.loads(line))
-        return entries
-
-    def read_all(self) -> List[BucketEntry]:
-        """Read all bucket entries from the persistent store."""
-        with self._lock:
-            raw_entries = self._read_all_raw()
-        return [BucketEntry(**e) for e in raw_entries]
-
-    def get_by_trace_hash(self, trace_hash: str) -> Optional[BucketEntry]:
-        """Lookup a bucket entry by its deterministic trace hash."""
-        entries = self.read_all()
-        for entry in entries:
-            if entry.trace_hash == trace_hash:
-                return entry
-        return None
-
-    def get_chain(self) -> List[BucketEntry]:
-        """Return all entries ordered by insertion (trace lineage chain)."""
-        return self.read_all()
-
-    def clear(self) -> None:
-        """Clear the bucket file (for testing only)."""
-        with self._lock:
-            if os.path.exists(self._file_path):
-                os.remove(self._file_path)
-            self._last_bucket_id = None
-
-
-# ============================================================
-# Global Singleton
-# ============================================================
-
-bucket_ledger = BucketLedger()
-
-
-# ============================================================
-# Public API
+# API Client
 # ============================================================
 
 def write_bucket_entry(
-    action_id: str,
+    execution_id: str,
     request_payload: Dict[str, Any],
     dgic_snapshot: Dict[str, Any],
     decision: str,
@@ -272,30 +56,113 @@ def write_bucket_entry(
     confidence: float,
     failure_reason: Optional[str],
     trace_hash: str,
-) -> BucketEntry:
-    return bucket_ledger.write(
-        action_id=action_id,
-        request_payload=request_payload,
-        dgic_snapshot=dgic_snapshot,
-        decision=decision,
-        risk_score=risk_score,
-        confidence=confidence,
-        failure_reason=failure_reason,
-        trace_hash=trace_hash,
-    )
+) -> Optional[Dict[str, Any]]:
+    """
+    Synchronously submit the enforcement decision to the external Bucket service.
+    Fails open (catches all exceptions, logs them, and does not crash out) to 
+    prevent the Bucket from becoming a single point of failure for enforcement.
+    """
+    timestamp_utc = datetime.now(timezone.utc).isoformat()
+    
+    # Structure payload inside typical execution details
+    execution_payload = {
+        "request_payload": request_payload,
+        "dgic_snapshot": dgic_snapshot,
+        "decision": decision,
+        "risk_score": risk_score,
+        "confidence": confidence,
+        "failure_reason": failure_reason,
+        "trace_hash": trace_hash
+    }
+
+    # Shape to match the Primary_Bucket_Owner canonical spec
+    artifact = {
+        "artifact_id": execution_id,
+        "source_module_id": "bhiv_enforcement_gate",
+        "schema_version": "1.0.0",
+        "timestamp_utc": timestamp_utc,
+        "artifact_type": "truth_event",
+        "payload": execution_payload
+    }
+
+    # Add hash
+    artifact["artifact_hash"] = compute_artifact_hash(artifact)
+
+    # Dispatch synchronously to external service
+    target_url = f"{BUCKET_SERVICE_URL.rstrip('/')}/bucket/artifact"
+    
+    try:
+        logger.info(
+            f"Dispatching artifact to external bucket | execution_id={execution_id}",
+            extra={
+                "event_type": "bucket_dispatch_start",
+                "execution_id": execution_id,
+                "target_url": target_url
+            }
+        )
+        # Assuming a reasonable timeout so we don't hang enforcement forever
+        response = requests.post(
+            target_url,
+            json=artifact,
+            headers={"Content-Type": "application/json"},
+            timeout=3.0
+        )
+        response.raise_for_status()
+        
+        logger.info(
+            f"Artifact successfully stored in external bucket | execution_id={execution_id}",
+            extra={
+                "event_type": "bucket_dispatch_success",
+                "execution_id": execution_id,
+            }
+        )
+        return artifact
+        
+    except requests.exceptions.RequestException as e:
+        # FAIL OPEN POLICY: We do not fail the core logic if logging to bucket fails.
+        # Ensure we log loudly so telemetry or alerting catches it.
+        logger.error(
+            f"External bucket recording failed | execution_id={execution_id} | error={str(e)}",
+            exc_info=True,
+            extra={
+                "event_type": "bucket_dispatch_failed",
+                "execution_id": execution_id,
+                "target_url": target_url,
+                "error": str(e)
+            }
+        )
+        return None
 
 
-def get_bucket_entries() -> List[BucketEntry]:
-    return bucket_ledger.read_all()
+# ============================================================
+# API Read Methods
+# ============================================================
 
+def get_bucket_entries(limit: int = 100, offset: int = 0) -> list[Dict[str, Any]]:
+    """
+    Fetch raw artifacts from the external Bucket service.
+    """
+    target_url = f"{BUCKET_SERVICE_URL.rstrip('/')}/bucket/artifacts"
+    try:
+        response = requests.get(target_url, params={"limit": limit, "offset": offset}, timeout=5.0)
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to fetch bucket entries from {target_url}: {e}")
+        return []
 
-def get_bucket_entry(trace_hash: str) -> Optional[BucketEntry]:
-    return bucket_ledger.get_by_trace_hash(trace_hash)
-
-
-def get_bucket_chain() -> List[BucketEntry]:
-    return bucket_ledger.get_chain()
-
-
-def clear_bucket() -> None:
-    bucket_ledger.clear()
+def get_bucket_entry(artifact_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Fetch a specific artifact from the external Bucket service by its ID.
+    Note: Previously, the local system indexed by trace_hash. Now we query by artifact_id.
+    """
+    target_url = f"{BUCKET_SERVICE_URL.rstrip('/')}/bucket/artifact/{artifact_id}"
+    try:
+        response = requests.get(target_url, timeout=3.0)
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to fetch bucket entry {artifact_id} from {target_url}: {e}")
+        return None

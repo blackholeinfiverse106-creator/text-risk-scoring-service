@@ -72,7 +72,7 @@ def test_audit_log_completeness():
         # 1 keyword in 'fraud' (0.2)
         # Total expecting: 0.6 + 0.2 = 0.8 / HIGH
         text = "kill murder attack scam" 
-        result = analyze_text(text, correlation_id="AUDIT-TEST-001")
+        result = analyze_text(text, execution_id="AUDIT-TEST-001")
         
         # 3. Get Logs
         log_contents = log_capture.getvalue()

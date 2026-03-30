@@ -18,13 +18,13 @@ import hashlib
 import json
 from app.enforcement_schemas import (
     EvaluateActionRequest,
-    EvaluateActionResponse,
+    SarathiEvaluateResponse,
     ContextSignal,
     DGICEpistemicStateInput,
     SourceSystem,
-    EnforcementDecision,
+    SarathiDecision,
 )
-from app.enforcement_gate import (
+from app.sarathi_governance import (
     evaluate_action,
     compute_trace_hash,
     aggregate_context_signals,
@@ -70,14 +70,14 @@ def _make_request(
     source_system: SourceSystem = SourceSystem.AI_BEING,
     dgic_state: DGICEpistemicStateInput | None = None,
     context_signals: list | None = None,
-    action_id: str = "action-001",
+    execution_id: str = "action-001",
     actor: str = "test-actor",
 ) -> EvaluateActionRequest:
     """Build a valid enforcement request."""
     if dgic_state is None:
         dgic_state = _make_dgic_state()
     return EvaluateActionRequest(
-        action_id=action_id,
+        execution_id=execution_id,
         actor=actor,
         proposed_action=proposed_action,
         context_signals=context_signals or [],
@@ -95,7 +95,7 @@ class TestAllowPath:
         """Clean action + KNOWN epistemic state → ALLOW."""
         req = _make_request(proposed_action="Prepare daily report summary")
         result = evaluate_action(req)
-        assert result.enforcement_decision == EnforcementDecision.ALLOW
+        assert result.sarathi_decision == SarathiDecision.ALLOW
         assert result.failure_reason is None
         assert result.risk_score >= 0.0
         assert result.confidence >= 0.0
@@ -106,7 +106,7 @@ class TestAllowPath:
         dgic = _make_dgic_state(epistemic_state="INFERRED", entropy_score=0.3)
         req = _make_request(proposed_action="Generate weather report", dgic_state=dgic)
         result = evaluate_action(req)
-        assert result.enforcement_decision == EnforcementDecision.ALLOW
+        assert result.sarathi_decision == SarathiDecision.ALLOW
         assert result.failure_reason is None
 
     def test_low_risk_action_with_context_signals_allows(self):
@@ -117,7 +117,7 @@ class TestAllowPath:
         ]
         req = _make_request(proposed_action="Log sensor reading", context_signals=signals)
         result = evaluate_action(req)
-        assert result.enforcement_decision == EnforcementDecision.ALLOW
+        assert result.sarathi_decision == SarathiDecision.ALLOW
 
 
 # ============================================================
@@ -131,7 +131,7 @@ class TestDenyPath:
             proposed_action="kill the target and attack the base with bomb and shoot everyone"
         )
         result = evaluate_action(req)
-        assert result.enforcement_decision == EnforcementDecision.DENY
+        assert result.sarathi_decision == SarathiDecision.DENY
         assert result.failure_reason is not None
         assert result.risk_score >= DENY_RISK_THRESHOLD
 
@@ -142,7 +142,7 @@ class TestDenyPath:
         ]
         req = _make_request(proposed_action="Send greeting", context_signals=signals)
         result = evaluate_action(req)
-        assert result.enforcement_decision == EnforcementDecision.DENY
+        assert result.sarathi_decision == SarathiDecision.DENY
         assert result.failure_reason is not None
 
     def test_ambiguous_state_medium_risk_denied(self):
@@ -158,7 +158,7 @@ class TestDenyPath:
             context_signals=signals,
         )
         result = evaluate_action(req)
-        assert result.enforcement_decision == EnforcementDecision.DENY
+        assert result.sarathi_decision == SarathiDecision.DENY
         assert "Ambiguous" in result.failure_reason or "ambiguous" in result.failure_reason.lower()
 
 
@@ -172,7 +172,7 @@ class TestAbstainPath:
         dgic = _make_dgic_state(epistemic_state="UNKNOWN", entropy_score=0.0)
         req = _make_request(proposed_action="Run diagnostic scan", dgic_state=dgic)
         result = evaluate_action(req)
-        assert result.enforcement_decision == EnforcementDecision.ABSTAIN
+        assert result.sarathi_decision == SarathiDecision.ABSTAIN
         assert result.failure_reason is not None
         assert "abstention" in result.failure_reason.lower() or "UNKNOWN" in result.failure_reason
 
@@ -185,7 +185,7 @@ class TestAbstainPath:
         tampered_dgic = DGICEpistemicStateInput(**dgic_dict)
         req = _make_request(proposed_action="Normal action", dgic_state=tampered_dgic)
         result = evaluate_action(req)
-        assert result.enforcement_decision == EnforcementDecision.ABSTAIN
+        assert result.sarathi_decision == SarathiDecision.ABSTAIN
         assert "DGIC snapshot rejected" in result.failure_reason
 
 
@@ -196,8 +196,8 @@ class TestAbstainPath:
 class TestTraceHashDeterminism:
     def test_same_inputs_produce_same_trace_hash(self):
         """Identical inputs must produce identical trace hash."""
-        req1 = _make_request(action_id="act-99", actor="agent-alpha")
-        req2 = _make_request(action_id="act-99", actor="agent-alpha")
+        req1 = _make_request(execution_id="act-99", actor="agent-alpha")
+        req2 = _make_request(execution_id="act-99", actor="agent-alpha")
         hash1 = compute_trace_hash(req1)
         hash2 = compute_trace_hash(req2)
         assert hash1 == hash2
@@ -205,8 +205,8 @@ class TestTraceHashDeterminism:
 
     def test_different_inputs_produce_different_trace_hash(self):
         """Different inputs must produce different trace hash."""
-        req1 = _make_request(action_id="act-1")
-        req2 = _make_request(action_id="act-2")
+        req1 = _make_request(execution_id="act-1")
+        req2 = _make_request(execution_id="act-2")
         assert compute_trace_hash(req1) != compute_trace_hash(req2)
 
     def test_replay_produces_identical_output(self):
@@ -215,7 +215,7 @@ class TestTraceHashDeterminism:
         result1 = evaluate_action(req)
         result2 = evaluate_action(req)
         assert result1.risk_score == result2.risk_score
-        assert result1.enforcement_decision == result2.enforcement_decision
+        assert result1.sarathi_decision == result2.sarathi_decision
         assert result1.confidence == result2.confidence
         assert result1.failure_reason == result2.failure_reason
         assert result1.trace_hash == result2.trace_hash
@@ -231,10 +231,10 @@ class TestSourceSystemCoverage:
         """Every BHIV source system must be accepted."""
         req = _make_request(source_system=system)
         result = evaluate_action(req)
-        assert result.enforcement_decision in {
-            EnforcementDecision.ALLOW,
-            EnforcementDecision.DENY,
-            EnforcementDecision.ABSTAIN,
+        assert result.sarathi_decision in {
+            SarathiDecision.ALLOW,
+            SarathiDecision.DENY,
+            SarathiDecision.ABSTAIN,
         }
         assert len(result.trace_hash) == 64
 
@@ -287,10 +287,10 @@ class TestContextSignalAggregation:
 # ============================================================
 
 class TestSchemaValidation:
-    def test_empty_action_id_rejected(self):
-        """Empty action_id fails Pydantic validation."""
+    def test_empty_execution_id_rejected(self):
+        """Empty execution_id fails Pydantic validation."""
         with pytest.raises(Exception):
-            _make_request(action_id="")
+            _make_request(execution_id="")
 
     def test_empty_proposed_action_rejected(self):
         """Empty proposed_action fails Pydantic validation."""
@@ -301,7 +301,7 @@ class TestSchemaValidation:
         """Invalid source_system fails Pydantic validation."""
         with pytest.raises(Exception):
             EvaluateActionRequest(
-                action_id="act-1",
+                execution_id="act-1",
                 actor="test",
                 proposed_action="test action",
                 context_signals=[],
@@ -330,7 +330,7 @@ class TestSchemaValidation:
         req = _make_request()
         result = evaluate_action(req)
         assert isinstance(result.risk_score, float)
-        assert isinstance(result.enforcement_decision, EnforcementDecision)
+        assert isinstance(result.sarathi_decision, SarathiDecision)
         assert isinstance(result.confidence, float)
         assert isinstance(result.trace_hash, str)
         assert 0.0 <= result.risk_score <= 1.0
