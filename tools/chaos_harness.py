@@ -35,8 +35,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.engine import analyze_text
-from app.dgic_adapter import (
+from app.layer1_sarathi import analyze_text
+from app.layer3_dgic import (
     EpistemicState,
     DGICInput,
     DGICPayload,
@@ -47,7 +47,7 @@ from app.dgic_adapter import (
     build_evidence_hash,
     compute_envelope_hash,
 )
-from app.enforcement_aggregator import (
+from app.layer6_insightbridge import (
     AggregatedSignal,
     aggregate_signals,
     validate_aggregation_inputs,

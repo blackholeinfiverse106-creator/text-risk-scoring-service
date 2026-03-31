@@ -6,9 +6,9 @@ import os
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_ROOT)
 
-from app.dgic_adapter import EpistemicState, DGICInput, DGICPayload, compute_envelope_hash
-from app.enforcement_aggregator import aggregate_signals
-from app.insightbridge_adapter import map_to_insightbridge_contract
+from app.layer3_dgic import EpistemicState, DGICInput, DGICPayload, compute_envelope_hash
+from app.layer6_insightbridge import aggregate_signals
+from app.layer6_insightbridge import map_to_insightbridge_contract
 
 def main():
     logging.getLogger().setLevel(logging.CRITICAL)

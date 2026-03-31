@@ -5,7 +5,7 @@ Tests all failure modes, boundary conditions, and extreme score edges
 import pytest
 import json
 import hashlib
-from app.engine import analyze_text
+from app.layer1_sarathi import analyze_text
 
 class TestInputFailures:
     """Test all INPUT_FAILURE modes"""

@@ -2,18 +2,18 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.schemas import InputSchema, OutputSchema, DGICIngestRequest, AggregateRequest
-from app.engine import analyze_text
+from app.layer1_sarathi import analyze_text
 from app.contract_enforcement import validate_input_contract, validate_output_contract, ContractViolation
-from app.dgic_adapter import validate_dgic_input, adapt_dgic, apply_dgic_modifiers, DGICContractViolation
-from app.enforcement_aggregator import aggregate_signals
-from app.insightbridge_adapter import map_to_insightbridge_contract
+from app.layer3_dgic import validate_dgic_input, adapt_dgic, apply_dgic_modifiers, DGICContractViolation
+from app.layer6_insightbridge import aggregate_signals
+from app.layer6_insightbridge import map_to_insightbridge_contract
 import logging
 import uuid
 from app.observability import setup_json_logging
 from app.unified_schemas import UnifiedAggregateRequest, UnifiedSignalInput
-from app.signal_aggregator import aggregate_unified_signals, UnifiedSignal, SignalType
-from app.dgic_enforcement_bridge import wrap_in_dgic_envelope
-from app.insightbridge_telemetry import emit_telemetry_dict
+from app.layer6_insightbridge import aggregate_unified_signals, UnifiedSignal, SignalType
+from app.layer3_dgic import wrap_in_dgic_envelope
+from app.layer6_insightbridge import emit_telemetry_dict
 from app.sutradhara_control_plane import invoke_agent, AgentVerificationError
 from app.enforcement_schemas import ContextSignal, DGICEpistemicStateInput
 from fastapi import HTTPException
@@ -47,7 +47,7 @@ def analyze(payload: InputSchema):
         text = validate_input_contract(request_data)
         logger.info(f"Input validated | length={len(text)}", extra={"execution_id": execution_id, "event_type": "contract_passed", "details": {"length": len(text)}})
         
-        response = analyze_text(text, correlation_id=execution_id)
+        response = analyze_text(text, execution_id=execution_id)
         logger.info(f"Analysis complete | risk={response['risk_category']}", extra={"execution_id": execution_id, "event_type": "engine_success", "details": {"risk": response['risk_category']}})
         
         validate_output_contract(response)
@@ -98,7 +98,7 @@ def dgic_ingest(payload: DGICIngestRequest):
     logger.info("DGIC envelope received", extra={"execution_id": execution_id, "event_type": "dgic_ingest"})
     try:
         dgic_input = validate_dgic_input(payload.dgic_envelope)
-        base_result = analyze_text(payload.text, correlation_id=execution_id)
+        base_result = analyze_text(payload.text, execution_id=execution_id)
         final_result = apply_dgic_modifiers(base_result, adapter_result=adapt_dgic(dgic_input))
         return final_result
     except DGICContractViolation as e:
@@ -179,7 +179,7 @@ def aggregate_unified_endpoint(payload: UnifiedAggregateRequest):
 # Sūtradhāra Control Plane Endpoint (Layer 2)
 # ============================================================
 
-from app.core_execution_gate import CoreExecutionResult
+from app.layer4_core import CoreExecutionResult
 
 class SutradharaInvokeRequest(_CoreBaseModel):
     """API-level request for Agent invocations."""
@@ -240,8 +240,8 @@ def sutradhara_invoke(payload: SutradharaInvokeRequest):
 # Bucket Ledger + Replay Verification Endpoints
 # ============================================================
 
-from app.bucket_ledger import get_bucket_entries, get_bucket_entry
-from app.replay_verifier import verify_by_trace_hash, verify_all, ReplayResult
+from app.layer5_bucket import get_bucket_entries, get_bucket_entry
+from app.layer5_bucket import verify_by_trace_hash, verify_all, ReplayResult
 from dataclasses import asdict as _asdict
 
 @app.get("/api/v1/bucket/entries")

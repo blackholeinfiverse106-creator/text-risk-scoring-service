@@ -19,7 +19,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from app.dgic_adapter import (
+from app.layer3_dgic import (
     EpistemicState,
     DGICInput,
     DGICPayload,
@@ -35,7 +35,7 @@ from app.dgic_adapter import (
     INFERRED_ENTROPY_SCALING_FACTOR,
     ABSTENTION_ERROR_CODE,
 )
-from app.engine import analyze_text
+from app.layer1_sarathi import analyze_text
 
 # ──────────────────────────────────────────────────────────────
 # Fixtures

@@ -7,7 +7,7 @@ with open(FILE_PATH, "r", encoding="utf-8") as f:
     content = f.read()
 
 # 1. Update imports
-import_old = """from app.dgic_adapter import (
+import_old = """from app.layer3_dgic import (
     EpistemicState,
     DGICInput,
     DGICContractViolation,
@@ -17,7 +17,7 @@ import_old = """from app.dgic_adapter import (
     build_evidence_hash,
 )"""
 
-import_new = """from app.dgic_adapter import (
+import_new = """from app.layer3_dgic import (
     EpistemicState,
     DGICInput,
     DGICPayload,

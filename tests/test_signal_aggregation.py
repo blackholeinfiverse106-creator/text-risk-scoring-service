@@ -5,10 +5,10 @@ Tests covering: mixed signal types, varying weights, partial abstention,
 all-abstain edge case, single-signal, and full 4-type aggregation.
 """
 import pytest
-from app.signal_aggregator import (
+from app.layer6_insightbridge import (
     UnifiedSignal, SignalType, aggregate_unified_signals,
 )
-from app.dgic_adapter import (
+from app.layer3_dgic import (
     DGICInput, DGICPayload, EpistemicState, compute_envelope_hash,
 )
 

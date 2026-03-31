@@ -7,10 +7,10 @@ in the semantic output hash. Proves the aggregator is deterministic.
 import hashlib
 import json
 import pytest
-from app.signal_aggregator import (
+from app.layer6_insightbridge import (
     UnifiedSignal, SignalType, aggregate_unified_signals, AggregatedUnifiedSignal,
 )
-from app.dgic_adapter import (
+from app.layer3_dgic import (
     DGICInput, DGICPayload, EpistemicState, compute_envelope_hash,
 )
 

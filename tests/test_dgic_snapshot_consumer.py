@@ -8,14 +8,14 @@ cryptographic seals, and entropy boundary classification.
 import pytest
 import hashlib
 from datetime import datetime
-from app.dgic_snapshot_consumer import (
+from app.layer3_dgic import (
     ingest_dgic_snapshot,
     verify_snapshot_integrity,
     DGICSnapshotError,
     EntropyBoundary,
     DGICSnapshot,
 )
-from app.dgic_adapter import compute_envelope_hash
+from app.layer3_dgic import compute_envelope_hash
 
 
 # ============================================================

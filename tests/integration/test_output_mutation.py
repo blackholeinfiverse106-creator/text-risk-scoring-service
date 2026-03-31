@@ -14,7 +14,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from app.engine import analyze_text
+from app.layer1_sarathi import analyze_text
 from app.contract_enforcement import validate_output_contract, ContractViolation
 
 

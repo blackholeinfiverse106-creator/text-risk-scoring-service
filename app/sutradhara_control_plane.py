@@ -20,7 +20,7 @@ from app.enforcement_schemas import (
     ContextSignal,
     DGICEpistemicStateInput,
 )
-from app.core_execution_gate import submit_proposal, CoreExecutionResult
+from app.layer4_core import submit_proposal, CoreExecutionResult
 
 logger = logging.getLogger(__name__)
 

@@ -24,14 +24,14 @@ from typing import List, Tuple
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from app.dgic_adapter import (
+from app.layer3_dgic import (
     EpistemicState, 
     DGICInput, 
     DGICPayload,
     build_evidence_hash, 
     compute_envelope_hash
 )
-from app.enforcement_aggregator import (
+from app.layer6_insightbridge import (
     AggregatedSignal,
     ScoredSignal,
     aggregate_signals,

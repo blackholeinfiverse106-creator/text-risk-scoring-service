@@ -23,13 +23,13 @@ from typing import List, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app.engine import analyze_text
-from app.dgic_adapter import (
+from app.layer1_sarathi import analyze_text
+from app.layer3_dgic import (
     EpistemicState,
     DGICInput,
     build_evidence_hash,
 )
-from app.enforcement_aggregator import aggregate_signals
+from app.layer6_insightbridge import aggregate_signals
 from mock_insightbridge_consumer import InsightBridgeMock, produce_v4_payload
 
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))

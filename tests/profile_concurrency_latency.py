@@ -8,7 +8,7 @@ import os
 # Allow running from anywhere
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
-from app.engine import analyze_text
+from app.layer1_sarathi import analyze_text
 
 def task(i):
     start = time.perf_counter()

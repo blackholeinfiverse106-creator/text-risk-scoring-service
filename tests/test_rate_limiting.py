@@ -1,7 +1,7 @@
 import pytest
 import time
 import tracemalloc
-from app.engine import analyze_text, MAX_TEXT_LENGTH
+from app.layer1_sarathi import analyze_text, MAX_TEXT_LENGTH
 
 class MockRateLimiter:
     """

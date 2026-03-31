@@ -24,14 +24,14 @@ from app.enforcement_schemas import (
     SourceSystem,
     SarathiDecision,
 )
-from app.sarathi_governance import (
+from app.layer1_sarathi import (
     evaluate_action,
     compute_trace_hash,
     aggregate_context_signals,
     DENY_RISK_THRESHOLD,
     AMBIGUOUS_DENY_THRESHOLD,
 )
-from app.dgic_adapter import compute_envelope_hash
+from app.layer3_dgic import compute_envelope_hash
 
 
 # ============================================================

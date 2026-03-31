@@ -3,7 +3,7 @@ Test: Fail-Closed Behavior
 Validates that system fails safely under error conditions
 """
 import pytest
-from app.engine import analyze_text
+from app.layer1_sarathi import analyze_text
 
 class TestFailClosedBehavior:
     """Test fail-closed behavior under error conditions"""

@@ -1,4 +1,4 @@
-from app.engine import analyze_text
+from app.layer1_sarathi import analyze_text
 import time
 
 TEST_TEXT = "kill and scam"

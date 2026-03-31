@@ -19,8 +19,8 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from app.engine import analyze_text
-from app.dgic_adapter import (
+from app.layer1_sarathi import analyze_text
+from app.layer3_dgic import (
     EpistemicState,
     DGICInput,
     DGICPayload,

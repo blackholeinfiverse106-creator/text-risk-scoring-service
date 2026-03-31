@@ -1,16 +1,16 @@
 import pytest
-from app.insightbridge_telemetry import (
+from app.layer6_insightbridge import (
     emit_telemetry_event,
     emit_telemetry_dict,
     InsightBridgeTelemetryEvent,
 )
-from app.dgic_enforcement_bridge import wrap_in_dgic_envelope
-from app.signal_aggregator import (
+from app.layer3_dgic import wrap_in_dgic_envelope
+from app.layer6_insightbridge import (
     UnifiedSignal,
     SignalType,
     aggregate_unified_signals,
 )
-from app.dgic_adapter import (
+from app.layer3_dgic import (
     DGICInput,
     DGICPayload,
     EpistemicState,

@@ -1,6 +1,6 @@
 import pytest
 import time
-from app.engine import analyze_text, MAX_TEXT_LENGTH
+from app.layer1_sarathi import analyze_text, MAX_TEXT_LENGTH
 
 def test_payload_truncation():
     """

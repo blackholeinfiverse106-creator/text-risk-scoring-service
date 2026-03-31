@@ -28,7 +28,7 @@ from typing import Optional
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 
-from app.engine import analyze_text
+from app.layer1_sarathi import analyze_text
 
 # ── Policy thresholds (read-only — not fed back to engine) ────────────────────
 

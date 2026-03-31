@@ -11,7 +11,7 @@ import pytest
 import requests
 from unittest.mock import patch, MagicMock
 
-from app.bucket_ledger import (
+from app.layer5_bucket import (
     write_bucket_entry,
     get_bucket_entries,
     get_bucket_entry,
@@ -49,7 +49,7 @@ def test_compute_artifact_hash_excludes_itself():
 # Write Entry (POST)
 # ============================================================
 
-@patch("app.bucket_ledger.requests.post")
+@patch("app.layer5_bucket.requests.post")
 def test_write_bucket_entry_success(mock_post):
     """Test that a successful post formats the artifact correctly."""
     
@@ -89,7 +89,7 @@ def test_write_bucket_entry_success(mock_post):
     assert kwargs["json"] == result
 
 
-@patch("app.bucket_ledger.requests.post")
+@patch("app.layer5_bucket.requests.post")
 def test_write_bucket_entry_fail_open(mock_post):
     """Test that if the bucket service fails, we catch the exception and return None."""
     
@@ -115,7 +115,7 @@ def test_write_bucket_entry_fail_open(mock_post):
 # Read Entries (GET)
 # ============================================================
 
-@patch("app.bucket_ledger.requests.get")
+@patch("app.layer5_bucket.requests.get")
 def test_get_bucket_entries(mock_get):
     mock_response = MagicMock()
     mock_response.json.return_value = [{"artifact_id": "test"}]
@@ -133,7 +133,7 @@ def test_get_bucket_entries(mock_get):
     )
 
 
-@patch("app.bucket_ledger.requests.get")
+@patch("app.layer5_bucket.requests.get")
 def test_get_bucket_entry(mock_get):
     mock_response = MagicMock()
     mock_response.status_code = 200
@@ -150,7 +150,7 @@ def test_get_bucket_entry(mock_get):
         timeout=3.0
     )
 
-@patch("app.bucket_ledger.requests.get")
+@patch("app.layer5_bucket.requests.get")
 def test_get_bucket_entry_not_found(mock_get):
     mock_response = MagicMock()
     mock_response.status_code = 404

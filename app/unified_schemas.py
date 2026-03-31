@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field
-from app.signal_aggregator import SignalType
+from app.layer6_insightbridge import SignalType
 
 class UnifiedSignalInput(BaseModel):
     signal_id: str

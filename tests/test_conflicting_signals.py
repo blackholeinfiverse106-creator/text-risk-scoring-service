@@ -5,10 +5,10 @@ Tests covering: full contradiction density, mixed contradiction/clean,
 contradiction penalty math, contradictions don't inflate scores.
 """
 import pytest
-from app.signal_aggregator import (
+from app.layer6_insightbridge import (
     UnifiedSignal, SignalType, aggregate_unified_signals,
 )
-from app.dgic_adapter import (
+from app.layer3_dgic import (
     DGICInput, DGICPayload, EpistemicState, compute_envelope_hash,
 )
 

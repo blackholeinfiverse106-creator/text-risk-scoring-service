@@ -22,8 +22,8 @@ from typing import Dict, Any, List, Tuple
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_ROOT)
 
-from app.dgic_adapter import EpistemicState, DGICInput, DGICPayload, compute_envelope_hash
-from app.enforcement_aggregator import aggregate_signals
+from app.layer3_dgic import EpistemicState, DGICInput, DGICPayload, compute_envelope_hash
+from app.layer6_insightbridge import aggregate_signals
 
 RUNS = 10000
 CONCURRENCY = 100

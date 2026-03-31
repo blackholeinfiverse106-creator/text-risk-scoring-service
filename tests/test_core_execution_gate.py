@@ -1,13 +1,18 @@
 """
 Tests for Core Execution Gate
 ===============================
-Validates the full Core submit→evaluate→map→execute pipeline.
-Covers all decision paths: ALLOW, BLOCK, ESCALATE, REQUEST_MORE_DATA.
+Validates the full Core submit→evaluate→enforce pipeline.
+Covers all decision paths: ALLOW, BLOCK.
+
+Phase 5: Enforcement is now a pure pass-through.
+  ALLOW → execute (executed=True)
+  Anything else → BLOCK (executed=False)
+  NO interpretation (no ESCALATE, no REQUEST_MORE_DATA)
 """
 
 import pytest
 import hashlib
-from app.core_execution_gate import submit_proposal, CoreExecutionResult
+from app.layer4_core import submit_proposal, CoreExecutionResult
 from app.enforcement_schemas import (
     SarathiDecision,
     EnforcementDecision,
@@ -15,8 +20,8 @@ from app.enforcement_schemas import (
     ContextSignal,
     SourceSystem,
 )
-from app.enforcement_ledger import get_ledger_entries, clear_ledger
-from app.dgic_adapter import compute_envelope_hash
+from app.layer5_bucket import get_ledger_entries, clear_ledger
+from app.layer3_dgic import compute_envelope_hash
 
 
 # ============================================================
@@ -72,7 +77,7 @@ class TestAllowPath:
             source_system=SourceSystem.AI_BEING,
         )
         assert isinstance(result, CoreExecutionResult)
-        assert result.execution_decision == SarathiDecision.ALLOW
+        assert result.execution_decision == EnforcementDecision.ALLOW
         assert result.executed is True
         assert result.gate_decision == SarathiDecision.ALLOW
         assert result.execution_id == "prop-001"
@@ -135,14 +140,8 @@ class TestBlockPath:
         assert result.execution_decision == EnforcementDecision.BLOCK
         assert result.executed is False
 
-
-# ============================================================
-# ESCALATE path — AMBIGUOUS + medium risk
-# ============================================================
-
-class TestEscalatePath:
-    def test_ambiguous_medium_risk_escalates(self):
-        """AMBIGUOUS state + risk >= 0.3 → DENY → ESCALATE."""
+    def test_ambiguous_medium_risk_blocks(self):
+        """AMBIGUOUS state + risk >= 0.3 → DENY → BLOCK (no ESCALATE interpretation)."""
         dgic = _make_dgic_state(epistemic_state="AMBIGUOUS", entropy_score=0.5)
         signals = [
             ContextSignal(signal_id="s1", signal_type="anomaly", value=0.4, source="sensor-a"),
@@ -155,19 +154,12 @@ class TestEscalatePath:
             dgic_epistemic_state=dgic,
             source_system=SourceSystem.AIAIC,
         )
-        assert result.execution_decision == EnforcementDecision.ESCALATE
+        assert result.execution_decision == EnforcementDecision.BLOCK
         assert result.executed is False
         assert result.gate_decision == SarathiDecision.DENY
-        assert "ambiguous" in result.failure_reason.lower() or "uncertainty" in result.failure_reason.lower()
 
-
-# ============================================================
-# REQUEST_MORE_DATA path — UNKNOWN epistemic state
-# ============================================================
-
-class TestRequestMoreDataPath:
-    def test_unknown_epistemic_state_requests_data(self):
-        """UNKNOWN epistemic state → ABSTAIN → REQUEST_MORE_DATA."""
+    def test_unknown_epistemic_state_blocks(self):
+        """UNKNOWN epistemic state → ABSTAIN → BLOCK (no REQUEST_MORE_DATA interpretation)."""
         dgic = _make_dgic_state(epistemic_state="UNKNOWN", entropy_score=0.0)
         result = submit_proposal(
             execution_id="prop-006",
@@ -177,7 +169,7 @@ class TestRequestMoreDataPath:
             dgic_epistemic_state=dgic,
             source_system=SourceSystem.INSIGHTBRIDGE,
         )
-        assert result.execution_decision == EnforcementDecision.REQUEST_MORE_DATA
+        assert result.execution_decision == EnforcementDecision.BLOCK
         assert result.executed is False
         assert result.gate_decision == SarathiDecision.ABSTAIN
 

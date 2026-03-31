@@ -4,7 +4,7 @@ Validates deterministic behavior under stress and abuse
 """
 import pytest
 import concurrent.futures
-from app.engine import analyze_text
+from app.layer1_sarathi import analyze_text
 
 class TestRepeatabilityUnderAbuse:
     """Test deterministic behavior under abuse conditions"""

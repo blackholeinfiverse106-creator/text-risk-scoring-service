@@ -12,7 +12,7 @@ from app.enforcement_schemas import ContextSignal, SourceSystem, EvaluateActionR
 from app.marine_rules import calculate_marine_signal
 from app.aiaic_rules import calculate_aiaic_signal
 from app.c4s_rules import calculate_c4s_signal
-from app.sarathi_governance import aggregate_context_signals
+from app.layer1_sarathi import aggregate_context_signals
 
 
 # ============================================================

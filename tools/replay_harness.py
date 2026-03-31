@@ -30,7 +30,7 @@ _logging.getLogger("app.main").setLevel(_logging.CRITICAL)
 _logging.getLogger().setLevel(_logging.CRITICAL)
 # ────────────────────────────────────────────────────────────────────────────
 
-from app.engine import analyze_text
+from app.layer1_sarathi import analyze_text
 
 # ──────────────────────────────────────────────
 # CONFIGURATION

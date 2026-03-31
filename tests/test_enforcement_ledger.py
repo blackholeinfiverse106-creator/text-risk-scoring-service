@@ -5,14 +5,14 @@ Validates deterministic recording of enforcement decisions and snapshot replayab
 """
 
 import pytest
-from app.enforcement_ledger import (
+from app.layer5_bucket import (
     record_decision,
     get_ledger_entries,
     get_ledger_entry,
     clear_ledger,
     EnforcementLedgerEntry,
 )
-from app.dgic_snapshot_consumer import ingest_dgic_snapshot
+from app.layer3_dgic import ingest_dgic_snapshot
 from app.enforcement_schemas import (
     EvaluateActionRequest,
     SarathiEvaluateResponse,
@@ -20,7 +20,7 @@ from app.enforcement_schemas import (
     DGICEpistemicStateInput,
     SourceSystem,
 )
-from app.dgic_adapter import compute_envelope_hash
+from app.layer3_dgic import compute_envelope_hash
 import hashlib
 
 

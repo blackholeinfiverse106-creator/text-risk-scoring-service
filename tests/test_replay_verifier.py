@@ -7,16 +7,16 @@ Validates deterministic replay verification of bucket entries fetched from exter
 import os
 import hashlib
 import pytest
-from app.bucket_ledger import compute_artifact_hash
-from app.replay_verifier import verify_bucket_entry, ReplayResult
+from app.layer5_bucket import compute_artifact_hash
+from app.layer5_bucket import verify_bucket_entry, ReplayResult
 from app.enforcement_schemas import (
     EvaluateActionRequest,
     DGICEpistemicStateInput,
     SourceSystem,
 )
-from app.sarathi_governance import evaluate_action
-from app.enforcement_ledger import clear_ledger
-from app.dgic_adapter import compute_envelope_hash
+from app.layer1_sarathi import evaluate_action
+from app.layer5_bucket import clear_ledger
+from app.layer3_dgic import compute_envelope_hash
 
 
 def _make_lineage_hash(seed: str = "replay-test") -> str:

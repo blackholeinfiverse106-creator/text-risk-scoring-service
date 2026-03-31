@@ -13,7 +13,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from rate_simulation_tests.token_bucket import TokenBucket
-from app.engine import analyze_text
+from app.layer1_sarathi import analyze_text
 
 
 DURATION_SECONDS = 3       # Short wall-clock window for CI friendliness

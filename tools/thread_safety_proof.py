@@ -26,7 +26,7 @@ import logging as _logging
 _logging.getLogger("app.engine").setLevel(_logging.CRITICAL)
 _logging.getLogger().setLevel(_logging.CRITICAL)
 
-from app.engine import analyze_text
+from app.layer1_sarathi import analyze_text
 
 # ──────────────────────────────────────────────
 # SEMANTIC HASH

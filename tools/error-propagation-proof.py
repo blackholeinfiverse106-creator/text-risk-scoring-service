@@ -28,7 +28,7 @@ sys.path.insert(0, ROOT)
 logging.getLogger("app.engine").setLevel(logging.CRITICAL)
 logging.getLogger().setLevel(logging.CRITICAL)
 
-from app.engine import analyze_text
+from app.layer1_sarathi import analyze_text
 from app.contract_enforcement import validate_input_contract, ContractViolation
 
 VALID_CATEGORIES = {"LOW", "MEDIUM", "HIGH"}
