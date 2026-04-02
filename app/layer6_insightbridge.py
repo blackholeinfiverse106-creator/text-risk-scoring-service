@@ -1003,6 +1003,19 @@ class InsightBridgeTelemetryEvent:
     collapse_state: str
 
 
+@dataclass(frozen=True)
+class EmittedEnforcementTelemetry:
+    """
+    Sovereign-compliant, guaranteed telemetry for Core enforcement outcomes.
+    Prevents silent execution by broadcasting the decision trace.
+    """
+    execution_id: str
+    enforcement_decision: str
+    risk_score: float
+    confidence: float
+    trace_hash: str
+
+
 # ============================================================
 # Signal ID Computation
 # ============================================================
@@ -1063,6 +1076,35 @@ def emit_telemetry_dict(execution_id: str, envelope: DGICEnforcementEnvelope) ->
     """
     event = emit_telemetry_event(execution_id, envelope)
     return asdict(event)
+
+
+def emit_enforcement_telemetry(
+    execution_id: str,
+    enforcement_decision: str,
+    risk_score: float,
+    confidence: float,
+    trace_hash: str,
+) -> EmittedEnforcementTelemetry:
+    """
+    Phase 5: Emit the final enforcement decision telemetry to InsightBridge.
+    This guarantees NO SILENT EXECUTION. Every terminal decision is broadcast.
+    """
+    telemetry = EmittedEnforcementTelemetry(
+        execution_id=execution_id,
+        enforcement_decision=enforcement_decision,
+        risk_score=risk_score,
+        confidence=confidence,
+        trace_hash=trace_hash,
+    )
+
+    logger.info(
+        "InsightBridge enforcement decision telemetry emitted",
+        extra={
+            "event_type": "insightbridge_enforcement_emission",
+            "telemetry": asdict(telemetry),
+        },
+    )
+    return telemetry
 
 
 # ==============================================================================

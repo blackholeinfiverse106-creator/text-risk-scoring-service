@@ -227,13 +227,13 @@ def sutradhara_invoke(payload: SutradharaInvokeRequest):
         )
         return CoreExecutionResult(
             execution_id=payload.execution_id or "sys-failure",
-            execution_decision="BLOCK",
+            execution_decision="DENY",
             executed=False,
             risk_score=0.0,
             confidence=0.0,
             failure_reason=f"Internal Control Plane Error: {str(e)}",
             trace_hash="0" * 64,
-            gate_decision="ABSTAIN",
+            gate_decision="DENY",
         )
 
 # ============================================================

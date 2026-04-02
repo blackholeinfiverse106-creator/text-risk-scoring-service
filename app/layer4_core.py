@@ -2,20 +2,21 @@ from __future__ import annotations
 """
 Sovereign Layer File: app/layer4_core.py
 
-Core Execution Layer — Pure Enforcement Pass-Through
+Core Execution Layer — Raj Prajapati's Domain
+==============================================
 
-This module does NOT interpret Sarathi's decision.
-It receives the authoritative governance decision and:
-  IF decision == ALLOW → pass to Core (executed = True)
-  ELSE → block (executed = False)
-
-NO interpretation allowed. No ESCALATE, no REQUEST_MORE_DATA mapping.
-The raw Sarathi decision is preserved as-is.
+This module is the Core execution pipeline. It:
+  1. Calls Sarathi for governance decision
+  2. Passes Sarathi decision + DGIC snapshot to the Enforcement Gate
+  3. Based on enforcement verdict, Core maps execution outcomes
+  4. Core writes to Bucket (not enforcement)
+  5. Returns CoreExecutionResult
 
 Authority Boundary (IMMUTABLE):
+  - Sarathi (Layer 1) owns governance decisions.
+  - Enforcement Gate (layer4_enforcement) validates sovereign compliance.
+  - Core owns execution mapping (executed flag) and Bucket recording.
   - This module NEVER evaluates risk, thresholds, or epistemic states.
-  - All decision authority belongs to Sarathi (Layer 1).
-  - This module ONLY executes Sarathi-approved decisions.
 """
 
 
@@ -33,14 +34,14 @@ from app.enforcement_schemas import (
     SarathiEvaluateResponse,
     SarathiDecision,
     EnforcementDecision,
-    ExecuteActionRequest,
-    ExecuteActionResponse,
     ContextSignal,
     DGICEpistemicStateInput,
     SourceSystem,
 )
 from app.layer1_sarathi import evaluate_action as sarathi_evaluate
-from app.layer5_bucket import record_decision, write_execution_record
+from app.layer5_bucket import write_execution_record
+from app.layer4_enforcement import enforce, EnforcementVerdict, EnforcementHardFailure
+from app.layer6_insightbridge import emit_enforcement_telemetry
 
 logger = logging.getLogger(__name__)
 
@@ -51,34 +52,35 @@ logger = logging.getLogger(__name__)
 
 class CoreExecutionResult(BaseModel):
     """
-    The result of submitting an action proposal to the Core execution gate.
+    The result of submitting an action proposal to the Core execution pipeline.
 
-    `executed` is True ONLY when execution_decision == ALLOW.
+    `executed` is True ONLY when the enforcement verdict is ALLOW.
+    Core owns this mapping — not the enforcement gate.
     """
     execution_id: str = Field(
         ..., description="The original execution ID"
     )
     execution_decision: EnforcementDecision = Field(
-        ..., description="ALLOW or BLOCK — the enforcement outcome"
+        ..., description="ALLOW or DENY — the Core execution outcome"
     )
     executed: bool = Field(
-        ..., description="True only if execution_decision == ALLOW"
+        ..., description="True only if enforcement verdict == ALLOW. Core owns this mapping."
     )
     risk_score: float = Field(
-        ..., ge=0.0, le=1.0, description="Final computed risk score"
+        ..., ge=0.0, le=1.0, description="Final computed risk score from Sarathi"
     )
     confidence: float = Field(
-        ..., ge=0.0, le=1.0, description="Decision confidence"
+        ..., ge=0.0, le=1.0, description="Decision confidence from Sarathi"
     )
     failure_reason: Optional[str] = Field(
-        None, description="Null on ALLOW. Structured reason on BLOCK."
+        None, description="Null on ALLOW. Structured reason on DENY/ABSTAIN."
     )
     trace_hash: str = Field(
         ..., min_length=64, max_length=64,
         description="SHA-256 trace hash for deterministic replay"
     )
-    gate_decision: EnforcementDecision = Field(
-        ..., description="The raw Sarathi governance decision"
+    gate_decision: str = Field(
+        ..., description="The raw enforcement verdict (ALLOW/DENY/ABSTAIN)"
     )
 
 
@@ -95,16 +97,18 @@ def submit_proposal(
     source_system: SourceSystem,
 ) -> CoreExecutionResult:
     """
-    Submit an action proposal to the Core execution gate.
+    Submit an action proposal to the Core execution pipeline.
 
     Pipeline:
       1. Build EvaluateActionRequest from proposal fields
       2. Sarathi evaluates the proposal (governance decision)
-      3. Enforcement gate records the decision
-      4. Pure pass-through: ALLOW → execute, anything else → BLOCK
-      5. Log and return CoreExecutionResult
+      3. EXECUTION ID GUARD — verify Sarathi returned same execution_id
+      4. Enforcement gate validates sovereign compliance (HARD FAIL if invalid)
+      5. Core maps enforcement verdict to execution outcome (Core owns this)
+      6. Core records to Bucket (Core owns this, not enforcement)
+      7. Return CoreExecutionResult
 
-    NO interpretation. The Sarathi decision is the final word.
+    Sovereign Law: Sarathi decides. Enforcement validates. Core executes.
     """
     logger.info(
         f"Core proposal submitted | execution_id={execution_id}",
@@ -126,10 +130,10 @@ def submit_proposal(
         source_system=source_system,
     )
 
-    # Step 2: Sarathi governance evaluation (Layer 1 — decision authority)
+    # Step 2: Sarathi governance evaluation (Layer 1 — Aakanksha's decision authority)
     sarathi_response: SarathiEvaluateResponse = sarathi_evaluate(request)
 
-    # Step 2.5: EXECUTION ID GUARD (Phase 6)
+    # Step 3: EXECUTION ID GUARD (Phase 6)
     # Verify Sarathi returned the same execution_id we sent
     if sarathi_response.execution_id != execution_id:
         logger.error(
@@ -140,44 +144,98 @@ def submit_proposal(
                 "sarathi_execution_id": sarathi_response.execution_id,
             },
         )
-        return CoreExecutionResult(
+        result = CoreExecutionResult(
             execution_id=execution_id,
-            execution_decision=EnforcementDecision.BLOCK,
+            execution_decision=EnforcementDecision.DENY,
             executed=False,
             risk_score=0.0,
             confidence=0.0,
             failure_reason=f"Execution ID mismatch: pipeline sent '{execution_id}' but Sarathi returned '{sarathi_response.execution_id}'. Execution rejected.",
             trace_hash=sarathi_response.trace_hash,
-            gate_decision=EnforcementDecision.BLOCK,
+            gate_decision="DENY",
         )
+        emit_enforcement_telemetry(
+            execution_id=result.execution_id,
+            enforcement_decision=result.execution_decision.value,
+            risk_score=result.risk_score,
+            confidence=result.confidence,
+            trace_hash=result.trace_hash,
+        )
+        return result
 
-    # Step 3: Enforcement gate records the decision (Layer 4 — execution)
-    enforce_decision(request, sarathi_response)
+    # Step 4: Enforcement gate — sovereign compliance validation
+    # Build DGIC snapshot for enforcement (read-only context)
+    dgic_snapshot_dict = dgic_epistemic_state.model_dump(mode="json")
 
-    # Step 4: Pure pass-through — NO interpretation
-    # ALLOW → execute. Everything else → BLOCK.
-    sarathi_decision = sarathi_response.sarathi_decision
+    try:
+        verdict: EnforcementVerdict = enforce(
+            original_execution_id=execution_id,
+            sarathi_decision=sarathi_response.sarathi_decision.value,
+            sarathi_execution_id=sarathi_response.execution_id,
+            sarathi_trace_hash=sarathi_response.trace_hash,
+            sarathi_failure_reason=sarathi_response.failure_reason,
+            dgic_snapshot=dgic_snapshot_dict,
+        )
+    except EnforcementHardFailure as e:
+        logger.error(
+            f"Enforcement hard failure | execution_id={execution_id} | {e.code}: {e.message}",
+            extra={
+                "event_type": "enforcement_hard_failure",
+                "execution_id": execution_id,
+                "code": e.code,
+            },
+        )
+        result = CoreExecutionResult(
+            execution_id=execution_id,
+            execution_decision=EnforcementDecision.DENY,
+            executed=False,
+            risk_score=0.0,
+            confidence=0.0,
+            failure_reason=f"Enforcement hard failure: {e.code} — {e.message}",
+            trace_hash=sarathi_response.trace_hash,
+            gate_decision="DENY",
+        )
+        emit_enforcement_telemetry(
+            execution_id=result.execution_id,
+            enforcement_decision=result.execution_decision.value,
+            risk_score=result.risk_score,
+            confidence=result.confidence,
+            trace_hash=result.trace_hash,
+        )
+        return result
 
-    if sarathi_decision == SarathiDecision.ALLOW:
+    # Step 5: Core maps enforcement verdict to execution outcome
+    # Core owns this mapping — NOT the enforcement gate.
+    if verdict.verdict == "ALLOW":
         core_decision = EnforcementDecision.ALLOW
         executed = True
     else:
-        core_decision = EnforcementDecision.BLOCK
+        core_decision = EnforcementDecision.DENY
         executed = False
 
-    # Map raw Sarathi decision for the gate_decision field
-    raw_gate = EnforcementDecision(sarathi_decision.value)
+    # Step 6: Core records to Bucket (Core owns this — NOT enforcement)
+    # Write only to External API
+    write_execution_record(
+        execution_id=execution_id,
+        decision=core_decision.value,
+        risk_score=sarathi_response.risk_score,
+        confidence=sarathi_response.confidence,
+        trace_hash=sarathi_response.trace_hash,
+        request_payload=request.model_dump(mode="json"),
+        dgic_snapshot=dgic_snapshot_dict,
+        failure_reason=verdict.reasoning,
+    )
 
-    # Step 5: Build result
+    # Step 7: Build result
     result = CoreExecutionResult(
         execution_id=execution_id,
         execution_decision=core_decision,
         executed=executed,
         risk_score=sarathi_response.risk_score,
         confidence=sarathi_response.confidence,
-        failure_reason=sarathi_response.failure_reason,
+        failure_reason=verdict.reasoning,
         trace_hash=sarathi_response.trace_hash,
-        gate_decision=raw_gate,
+        gate_decision=verdict.verdict,
     )
 
     logger.info(
@@ -185,7 +243,7 @@ def submit_proposal(
         extra={
             "event_type": "core_execution_result",
             "execution_id": execution_id,
-            "sarathi_decision": sarathi_decision.value,
+            "enforcement_verdict": verdict.verdict,
             "core_decision": core_decision.value,
             "executed": executed,
             "risk_score": sarathi_response.risk_score,
@@ -193,97 +251,28 @@ def submit_proposal(
         },
     )
 
+    emit_enforcement_telemetry(
+        execution_id=result.execution_id,
+        enforcement_decision=result.execution_decision.value,
+        risk_score=result.risk_score,
+        confidence=result.confidence,
+        trace_hash=result.trace_hash,
+    )
+
     return result
 
 
 # ============================================================
-# Enforcement Gate — Pure Execution
+# NOTE: enforce_decision() REMOVED — Sovereign Law Compliance
 # ============================================================
-
-def enforce_decision(
-    request: EvaluateActionRequest,
-    sarathi_response: SarathiEvaluateResponse,
-    dgic_snapshot_dict: Optional[dict] = None,
-) -> ExecuteActionResponse:
-    """
-    Enforce a Sarathi-approved decision.
-
-    Pipeline:
-      1. Map Sarathi decision to enforcement disposition (ALLOW → ALLOW, else → BLOCK)
-      2. Record to enforcement ledger
-      3. Write to persistent bucket
-      4. Return ExecuteActionResponse
-
-    This function NEVER evaluates risk. It only enforces.
-    """
-    execution_id = request.execution_id
-    timestamp_utc = datetime.now(timezone.utc).isoformat()
-
-    # EXECUTION ID GUARD (Phase 6)
-    if sarathi_response.execution_id != execution_id:
-        logger.error(
-            f"enforce_decision: execution_id mismatch | request={execution_id} sarathi={sarathi_response.execution_id}",
-            extra={
-                "event_type": "enforcement_execution_id_mismatch",
-                "execution_id": execution_id,
-                "sarathi_execution_id": sarathi_response.execution_id,
-            },
-        )
-        return ExecuteActionResponse(
-            execution_id=execution_id,
-            enforcement_decision=EnforcementDecision.BLOCK,
-            executed=False,
-            trace_hash=sarathi_response.trace_hash,
-        )
-
-    logger.info(
-        "Enforcement gate: enforcing Sarathi decision",
-        extra={
-            "execution_id": execution_id,
-            "event_type": "enforcement_enforce_start",
-            "sarathi_decision": sarathi_response.sarathi_decision.value,
-            "source_system": request.source_system.value,
-        },
-    )
-
-    # Step 1: Pure mapping — ALLOW → ALLOW, else → BLOCK
-    if sarathi_response.sarathi_decision == SarathiDecision.ALLOW:
-        enforcement_decision = EnforcementDecision.ALLOW
-    else:
-        enforcement_decision = EnforcementDecision(sarathi_response.sarathi_decision.value)
-
-    executed = enforcement_decision == EnforcementDecision.ALLOW
-
-    # Step 2: Record to enforcement ledger
-    record_decision(
-        execution_id=execution_id,
-        timestamp_utc=timestamp_utc,
-        request=request,
-        sarathi_response=sarathi_response,
-    )
-
-    # Step 3: Build response
-    response = ExecuteActionResponse(
-        execution_id=execution_id,
-        enforcement_decision=enforcement_decision,
-        executed=executed,
-        trace_hash=sarathi_response.trace_hash,
-    )
-
-    logger.info(
-        f"Enforcement gate: {enforcement_decision.value} | executed={executed}",
-        extra={
-            "execution_id": execution_id,
-            "event_type": "enforcement_enforce_complete",
-            "enforcement_decision": enforcement_decision.value,
-            "sarathi_decision": sarathi_response.sarathi_decision.value,
-            "executed": executed,
-            "risk_score": sarathi_response.risk_score,
-            "trace_hash": sarathi_response.trace_hash,
-        },
-    )
-
-    return response
+# The old enforce_decision() function violated Sovereign Core Law:
+#   - It owned execution mapping (executed flag)
+#   - It wrote to Bucket directly (record_decision)
+#   - It re-interpreted Sarathi decisions
+#
+# Enforcement is now in layer4_enforcement.py (pure gate).
+# Core (this module) owns execution + bucket recording.
+# ============================================================
 
 
 # ============================================================

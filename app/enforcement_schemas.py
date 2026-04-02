@@ -10,7 +10,7 @@ All types are deterministic and serializable for replay verification.
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -47,19 +47,16 @@ class SarathiDecision(str, Enum):
 class EnforcementDecision(str, Enum):
     """
     The deterministic enforcement decision.
-    ALLOW             — action is permitted to execute.
-    DENY              — action is blocked; execution MUST NOT proceed.
-    ABSTAIN           — system cannot evaluate; caller must handle conservatively.
-    BLOCK             — Core-specific hard block (equivalent to DENY).
-    ESCALATE          — risk too ambiguous for automated decision; requires human review.
-    REQUEST_MORE_DATA — insufficient signal evidence to decide; caller must supply more data.
+    ALLOW   — action is permitted to execute.
+    DENY    — action is blocked; execution MUST NOT proceed.
+    ABSTAIN — system cannot evaluate; caller must handle conservatively.
+
+    Sovereign Law: No BLOCK, ESCALATE, or REQUEST_MORE_DATA.
+    Those are execution/intelligence concepts that violate enforcement boundaries.
     """
     ALLOW = "ALLOW"
     DENY = "DENY"
     ABSTAIN = "ABSTAIN"
-    BLOCK = "BLOCK"
-    ESCALATE = "ESCALATE"
-    REQUEST_MORE_DATA = "REQUEST_MORE_DATA"
 
 
 # ============================================================
@@ -138,6 +135,41 @@ class DGICEpistemicStateInput(BaseModel):
         valid = {"KNOWN", "INFERRED", "AMBIGUOUS", "UNKNOWN"}
         if v not in valid:
             raise ValueError(f"epistemic_state must be one of {valid}, got '{v}'")
+        return v
+
+
+# ============================================================
+# KSML Input (Phase 6)
+# ============================================================
+
+class KSMLInput(BaseModel):
+    """
+    Phase 6 Boundary Defense: KSML Canonical Input Envelope.
+    Only KSML formatted inputs are allowed at the Sūtradhāra edge.
+    """
+    execution_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=128,
+        description="Global unique identifier"
+    )
+    structured_signals: List[ContextSignal] = Field(
+        default_factory=list,
+        description="List of KSML contextual signals"
+    )
+    metadata: Dict[str, Any] = Field(
+        ...,
+        description="Strict namespace for legacy actor/proposed_action/source_system details"
+    )
+
+    @field_validator("metadata")
+    @classmethod
+    def validate_metadata_fields(cls, v: Dict[str, Any]) -> Dict[str, Any]:
+        """Ensure critical routing headers exist inside the KSML metadata block."""
+        required = {"actor", "proposed_action", "source_system", "dgic_epistemic_state"}
+        missing = required - set(v.keys())
+        if missing:
+            raise ValueError(f"KSML metadata missing required canonical fields: {sorted(missing)}")
         return v
 
 

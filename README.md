@@ -134,7 +134,121 @@ Full integration guide: see [`SYSTEM_INTEGRATION_GUIDE.md`](SYSTEM_INTEGRATION_G
 
 ---
 
-## Architecture
+## Sovereign Layer Architecture
+
+> **You are here → Layer 4 — Core Execution (Raj Prajapati)**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    BHIV Enforcement Ecosystem                │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  Layer 2: Sūtradhāra Control Plane                  │    │
+│  │  (Agent Registry + Routing)                         │    │
+│  │  File: sutradhara_control_plane.py                  │    │
+│  └──────────────────┬──────────────────────────────────┘    │
+│                     │                                       │
+│                     ▼                                       │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  Layer 1: Sarathi Governance (Aakanksha Parab)      │    │
+│  │  FINAL decision authority: ALLOW / DENY / ABSTAIN   │    │
+│  │  File: layer1_sarathi.py                            │    │
+│  └──────────────────┬──────────────────────────────────┘    │
+│                     │                                       │
+│         ┌───────────┼──────────────┐                        │
+│         ▼                          ▼                        │
+│  ┌──────────────┐    ┌─────────────────────────────────┐    │
+│  │  Layer 3:    │    │  Layer 4: Enforcement Gate      │    │
+│  │  DGIC        │    │  Pure sovereign gate            │    │
+│  │  (Pritesh)   │───▶│  ALLOW / DENY / ABSTAIN only   │    │
+│  │  Epistemic   │    │  File: layer4_enforcement.py    │    │
+│  │  reasoning   │    └──────────────┬──────────────────┘    │
+│  │  NO execution│                   │                       │
+│  │  layer3_dgic │                   ▼                       │
+│  │  .py         │    ┌─────────────────────────────────┐    │
+│  └──────────────┘    │  Layer 4: Core Execution ★      │    │
+│                      │  (Raj Prajapati — YOU)           │    │
+│                      │  Owns: execution + bucket writes │    │
+│                      │  File: layer4_core.py            │    │
+│                      └──────────────┬──────────────────┘    │
+│                                     │                       │
+│                     ┌───────────────┼──────────────┐        │
+│                     ▼                              ▼        │
+│  ┌──────────────────────────┐  ┌───────────────────────┐    │
+│  │  Layer 5: Bucket         │  │  Layer 6: InsightBridge│   │
+│  │  (Siddhesh Narkar)       │  │  (Vijay Dhawan)       │    │
+│  │  Immutable storage       │  │  Telemetry emission   │    │
+│  │  via API only            │  │  layer6_insightbridge │    │
+│  │  layer5_bucket.py        │  │  .py                  │    │
+│  └──────────────────────────┘  └───────────────────────┘    │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Layer Map
+
+| Layer | Name | File | Owner | Responsibility |
+|---|---|---|---|---|
+| **1** | Sarathi Governance | `app/layer1_sarathi.py` | Aakanksha Parab | FINAL decision (ALLOW / DENY / ABSTAIN) |
+| **2** | Sūtradhāra Control Plane | `app/sutradhara_control_plane.py` | Sūtradhāra Team | Agent registry + routing |
+| **3** | DGIC Epistemic | `app/layer3_dgic.py` | Pritesh Patra | Epistemic reasoning (no execution) |
+| **4** | Enforcement Gate | `app/layer4_enforcement.py` | *(pure gate)* | Sovereign compliance validation |
+| **4** | **Core Execution** | `app/layer4_core.py` | **Raj Prajapati** | **Executes approved actions ONLY** |
+| **5** | Bucket Ledger | `app/layer5_bucket.py` | Siddhesh Narkar | Immutable storage via API |
+| **6** | InsightBridge | `app/layer6_insightbridge.py` | Vijay Dhawan | Telemetry emission |
+| — | KSML | `app/enforcement_schemas.py` | Tanvi | Structured input/output contracts |
+
+---
+
+## Integration Block
+
+| Role | Owner | System Interaction |
+|---|---|---|
+| **Sarathi** | Aakanksha Parab | Provides FINAL governance decision. All layers depend on this. |
+| **Core** | Raj Prajapati | Executes approved actions ONLY. Owns execution mapping + bucket writes. |
+| **DGIC** | Pritesh Patra | Provides epistemic reasoning. No execution authority. |
+| **Bucket** | Siddhesh Narkar | Immutable storage via external API. Only Core writes to it. |
+| **InsightBridge** | Vijay Dhawan | Telemetry emission. Observability only. |
+| **KSML** | Tanvi | Structured input/output contract (schemas). |
+| **Sūtradhāra** | Agent Registry | All agents must be registered + visible. |
+
+---
+
+## Enforcement Gate Compliance (Sovereign Core Law)
+
+The Enforcement Gate (`layer4_enforcement.py`) is a **pure, zero-intelligence gate**:
+
+| Rule | Status |
+|---|---|
+| Does NOT think | ✅ |
+| Does NOT decide beyond enforcement | ✅ |
+| Does NOT own execution | ✅ |
+| Does NOT write to Bucket | ✅ |
+| HARD FAILS without Sarathi decision | ✅ |
+| HARD FAILS without DGIC snapshot | ✅ |
+| Returns ONLY ALLOW / DENY / ABSTAIN + reasoning | ✅ |
+
+---
+
+## Pipeline Flow
+
+```
+Agent Request
+  → Sūtradhāra (verify agent, provision execution_id)
+    → Core (build request)
+      → Sarathi (governance decision: ALLOW/DENY/ABSTAIN)
+        → Enforcement Gate (validate sovereign compliance)
+      ← Core (map verdict → executed flag)
+      → Bucket (record decision — Core writes, not enforcement)
+    ← CoreExecutionResult
+```
+
+---
+
+## Architecture (Service Endpoints)
 
 ```
 POST /analyze                        POST /api/v1/aggregate/unified
@@ -144,12 +258,18 @@ POST /analyze                        POST /api/v1/aggregate/unified
      ├─ validate_output_contract()        │   ├─ Per-signal DGIC scoring
      └─ Return response                  │   ├─ Weighted mean + penalty
                                           │   └─ Bounded [0.0, 1.0]
-                                          ├─ DGIC Enforcement Bridge
-                                          ├─ InsightBridge Telemetry
-                                          └─ Return enriched payload
+POST /api/v1/sutradhara/invoke           ├─ DGIC Enforcement Bridge
+     │                                    ├─ InsightBridge Telemetry
+     ├─ Sūtradhāra (agent verify)        └─ Return enriched payload
+     ├─ Core (submit_proposal)
+     │   ├─ Sarathi governance
+     │   ├─ Enforcement gate
+     │   ├─ Bucket recording
+     │   └─ CoreExecutionResult
+     └─ Return result
 ```
 
-No database. No cache. No external calls. Fully self-contained.
+No database. No cache. Bucket writes via external API. Fully sovereign-compliant.
 
 ---
 
@@ -163,6 +283,7 @@ No database. No cache. No external calls. Fully self-contained.
 | Error propagation | `python error-propagation-proof.py` | 9/9 paths verified |
 | Trace lineage | `python trace-lineage-demo.py` | 3/3 proven, 0 bleed |
 | Misuse resistance | `python -m pytest decision-injection-tests/ escalation-tests/` | 67 tests pass |
+| Sovereign compliance | `python -m pytest tests/ -v` | 407 tests pass |
 
 ---
 
@@ -188,4 +309,3 @@ No database. No cache. No external calls. Fully self-contained.
 - No authentication or rate limiting (infra responsibility)
 - English only
 - Scores are not probabilities — do not use for automated enforcement
--0-0-0-0-0

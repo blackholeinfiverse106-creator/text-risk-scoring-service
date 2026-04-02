@@ -4,7 +4,7 @@ Tests for Phase 6 (Execution ID Enforcement) and Phase 7 (Determinism Validation
 
 Phase 6: Validates that execution_id flows unchanged through:
   DGIC → Sarathi → Enforcement → Core → Bucket → InsightBridge
-  Mismatch → immediate BLOCK rejection.
+  Mismatch → immediate DENY rejection.
 
 Phase 7: Validates determinism — same input produces identical:
   • decision
@@ -18,7 +18,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from app.layer4_core import submit_proposal, CoreExecutionResult
-from app.layer5_bucket import clear_ledger, get_ledger_entries
+from app.layer5_bucket import get_bucket_entries
 from app.enforcement_schemas import (
     EvaluateActionRequest,
     SarathiEvaluateResponse,
@@ -82,11 +82,7 @@ def _make_request(
     )
 
 
-@pytest.fixture(autouse=True)
-def clean():
-    clear_ledger()
-    yield
-    clear_ledger()
+
 
 
 # ============================================================
@@ -109,7 +105,8 @@ class TestExecutionIdEnforcement:
         )
         assert result.execution_id == exec_id
 
-    def test_execution_id_in_ledger_matches(self):
+    @patch("app.layer4_core.write_execution_record")
+    def test_execution_id_in_ledger_matches(self, mock_write):
         """The ledger entry must carry the same execution_id."""
         exec_id = "exec-id-ledger-001"
         submit_proposal(
@@ -120,9 +117,8 @@ class TestExecutionIdEnforcement:
             dgic_epistemic_state=_make_dgic_state(),
             source_system=SourceSystem.AI_BEING,
         )
-        entries = get_ledger_entries()
-        assert len(entries) >= 1
-        assert entries[-1].execution_id == exec_id
+        mock_write.assert_called_once()
+        assert mock_write.call_args[1]["execution_id"] == exec_id
 
     def test_sarathi_preserves_execution_id(self):
         """Sarathi must return the same execution_id it received."""
@@ -155,7 +151,7 @@ class TestExecutionIdEnforcement:
         assert response.sarathi_decision == SarathiDecision.ABSTAIN
 
     def test_execution_id_mismatch_blocks(self):
-        """If Sarathi returns a different execution_id, Core must BLOCK."""
+        """If Sarathi returns a different execution_id, Core must DENY."""
         exec_id = "exec-mismatch-001"
 
         # Create a mock Sarathi response with a DIFFERENT execution_id
@@ -178,8 +174,8 @@ class TestExecutionIdEnforcement:
                 source_system=SourceSystem.AI_BEING,
             )
 
-        # Must be BLOCKED due to mismatch
-        assert result.execution_decision == EnforcementDecision.BLOCK
+        # Must be DENIED due to mismatch
+        assert result.execution_decision == EnforcementDecision.DENY
         assert result.executed is False
         assert "mismatch" in result.failure_reason.lower()
         assert result.execution_id == exec_id  # Must preserve the ORIGINAL id
@@ -311,7 +307,7 @@ class TestDeterminismValidation:
         ref_executed = ref.executed
         ref_risk = ref.risk_score
         ref_hash = ref.trace_hash
-        ref_gate = ref.gate_decision.value
+        ref_gate = ref.gate_decision
 
         for i in range(1000):
             result = submit_proposal(
@@ -330,7 +326,7 @@ class TestDeterminismValidation:
                 f"risk_score diverged at iteration {i}"
             assert result.trace_hash == ref_hash, \
                 f"trace_hash diverged at iteration {i}"
-            assert result.gate_decision.value == ref_gate, \
+            assert result.gate_decision == ref_gate, \
                 f"gate_decision diverged at iteration {i}"
 
     def test_context_signal_determinism_1000_iterations(self):
