@@ -283,7 +283,8 @@ class ExecuteActionRequest(BaseModel):
 
 class ExecuteActionResponse(BaseModel):
     """
-    The final executed response showing if the gate allowed it.
+    Phase 8 Clean Decision Contract.
+    Strict schema ensuring NO execution flags and NO action triggers exist.
     """
     execution_id: str = Field(
         ...,
@@ -291,13 +292,17 @@ class ExecuteActionResponse(BaseModel):
     )
     enforcement_decision: EnforcementDecision = Field(
         ...,
-        description="The final gate decision (e.g. ALLOW, DENY, BLOCK)"
+        description="ALLOW | DENY | ABSTAIN — final deterministic gate output"
     )
-    executed: bool = Field(
-        ...,
-        description="True ONLY if the enforcement gate permitted execution"
+    risk_score: float = Field(
+        ..., ge=0.0, le=1.0, description="Final computed risk score"
+    )
+    confidence: float = Field(
+        ..., ge=0.0, le=1.0, description="Decision confidence factor"
     )
     trace_hash: str = Field(
-        ...,
-        description="The trace hash of the Sarathi evaluation"
+        ..., min_length=64, max_length=64, description="Deterministic replay hash"
+    )
+    failure_reason: Optional[str] = Field(
+        None, description="Null on ALLOW, populated on DENY/ABSTAIN"
     )

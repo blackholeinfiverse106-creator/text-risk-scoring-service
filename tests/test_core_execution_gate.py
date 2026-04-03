@@ -74,9 +74,7 @@ class TestAllowPath:
             source_system=SourceSystem.AI_BEING,
         )
         assert isinstance(result, CoreExecutionResult)
-        assert result.execution_decision == EnforcementDecision.ALLOW
-        assert result.executed is True
-        assert result.gate_decision == "ALLOW"
+        assert result.enforcement_decision == EnforcementDecision.ALLOW
         assert result.execution_id == "prop-001"
         assert len(result.trace_hash) == 64
 
@@ -99,13 +97,11 @@ class TestDenyPath:
             dgic_epistemic_state=_make_dgic_state(),
             source_system=SourceSystem.SOVEREIGN_CORE,
         )
-        assert result.execution_decision == EnforcementDecision.DENY
-        assert result.executed is False
-        assert result.gate_decision == "DENY"
+        assert result.enforcement_decision == EnforcementDecision.DENY
         assert result.failure_reason is not None
 
     def test_tampered_dgic_seal_denied(self):
-        """Tampered DGIC envelope → Sarathi ABSTAIN → Core DENY, executed=False."""
+        """Tampered DGIC envelope → Sarathi ABSTAIN → Core ABSTAIN (no mapping)."""
         dgic = _make_dgic_state()
         dgic_dict = dgic.model_dump()
         dgic_dict["envelope_hash"] = "a" * 64
@@ -119,9 +115,7 @@ class TestDenyPath:
             dgic_epistemic_state=tampered,
             source_system=SourceSystem.C4S,
         )
-        assert result.execution_decision == EnforcementDecision.DENY
-        assert result.executed is False
-        assert result.gate_decision == "ABSTAIN"
+        assert result.enforcement_decision == EnforcementDecision.ABSTAIN
 
     def test_critical_entropy_denied(self):
         """CRITICAL entropy boundary → Sarathi DENY → Core DENY."""
@@ -134,8 +128,7 @@ class TestDenyPath:
             dgic_epistemic_state=dgic,
             source_system=SourceSystem.MARINE_INTELLIGENCE,
         )
-        assert result.execution_decision == EnforcementDecision.DENY
-        assert result.executed is False
+        assert result.enforcement_decision == EnforcementDecision.DENY
 
     def test_ambiguous_medium_risk_denied(self):
         """AMBIGUOUS state + risk >= 0.3 → Sarathi DENY → Core DENY (no ESCALATE)."""
@@ -151,12 +144,10 @@ class TestDenyPath:
             dgic_epistemic_state=dgic,
             source_system=SourceSystem.AIAIC,
         )
-        assert result.execution_decision == EnforcementDecision.DENY
-        assert result.executed is False
-        assert result.gate_decision == "DENY"
+        assert result.enforcement_decision == EnforcementDecision.DENY
 
     def test_unknown_epistemic_state_denied(self):
-        """UNKNOWN epistemic state → Sarathi ABSTAIN → Core DENY (no REQUEST_MORE_DATA)."""
+        """UNKNOWN epistemic state → Sarathi ABSTAIN → Core ABSTAIN (no REQUEST_MORE_DATA)."""
         dgic = _make_dgic_state(epistemic_state="UNKNOWN", entropy_score=0.0)
         result = submit_proposal(
             execution_id="prop-006",
@@ -166,9 +157,7 @@ class TestDenyPath:
             dgic_epistemic_state=dgic,
             source_system=SourceSystem.INSIGHTBRIDGE,
         )
-        assert result.execution_decision == EnforcementDecision.DENY
-        assert result.executed is False
-        assert result.gate_decision == "ABSTAIN"
+        assert result.enforcement_decision == EnforcementDecision.ABSTAIN
 
 
 # ============================================================
@@ -223,13 +212,10 @@ class TestResponseStructure:
             source_system=SourceSystem.AI_BEING,
         )
         assert isinstance(result.execution_id, str)
-        assert isinstance(result.execution_decision, EnforcementDecision)
-        assert isinstance(result.executed, bool)
+        assert isinstance(result.enforcement_decision, EnforcementDecision)
         assert isinstance(result.risk_score, float)
         assert isinstance(result.confidence, float)
         assert isinstance(result.trace_hash, str)
-        assert isinstance(result.gate_decision, str)
-        assert result.gate_decision in {"ALLOW", "DENY", "ABSTAIN"}
         assert 0.0 <= result.risk_score <= 1.0
         assert 0.0 <= result.confidence <= 1.0
         assert len(result.trace_hash) == 64

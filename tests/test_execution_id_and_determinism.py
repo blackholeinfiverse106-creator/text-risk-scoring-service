@@ -175,8 +175,7 @@ class TestExecutionIdEnforcement:
             )
 
         # Must be DENIED due to mismatch
-        assert result.execution_decision == EnforcementDecision.DENY
-        assert result.executed is False
+        assert result.enforcement_decision == EnforcementDecision.DENY
         assert "mismatch" in result.failure_reason.lower()
         assert result.execution_id == exec_id  # Must preserve the ORIGINAL id
 
@@ -303,11 +302,9 @@ class TestDeterminismValidation:
             source_system=SourceSystem.AI_BEING,
         )
 
-        ref_decision = ref.execution_decision.value
-        ref_executed = ref.executed
+        ref_decision = ref.enforcement_decision.value
         ref_risk = ref.risk_score
         ref_hash = ref.trace_hash
-        ref_gate = ref.gate_decision
 
         for i in range(1000):
             result = submit_proposal(
@@ -318,16 +315,12 @@ class TestDeterminismValidation:
                 dgic_epistemic_state=dgic,
                 source_system=SourceSystem.AI_BEING,
             )
-            assert result.execution_decision.value == ref_decision, \
-                f"execution_decision diverged at iteration {i}"
-            assert result.executed == ref_executed, \
-                f"executed diverged at iteration {i}"
+            assert result.enforcement_decision.value == ref_decision, \
+                f"enforcement_decision diverged at iteration {i}"
             assert result.risk_score == ref_risk, \
                 f"risk_score diverged at iteration {i}"
             assert result.trace_hash == ref_hash, \
                 f"trace_hash diverged at iteration {i}"
-            assert result.gate_decision == ref_gate, \
-                f"gate_decision diverged at iteration {i}"
 
     def test_context_signal_determinism_1000_iterations(self):
         """With context signals: 1000 iterations must produce identical results."""

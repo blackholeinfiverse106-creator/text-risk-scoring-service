@@ -52,19 +52,15 @@ logger = logging.getLogger(__name__)
 
 class CoreExecutionResult(BaseModel):
     """
-    The result of submitting an action proposal to the Core execution pipeline.
-
-    `executed` is True ONLY when the enforcement verdict is ALLOW.
-    Core owns this mapping — not the enforcement gate.
+    Phase 8 Clean Decision Contract.
+    The final output of submitting an action proposal to the Core pipeline.
+    Execution flags are STRICTLY PROHIBITED.
     """
     execution_id: str = Field(
         ..., description="The original execution ID"
     )
-    execution_decision: EnforcementDecision = Field(
-        ..., description="ALLOW or DENY — the Core execution outcome"
-    )
-    executed: bool = Field(
-        ..., description="True only if enforcement verdict == ALLOW. Core owns this mapping."
+    enforcement_decision: EnforcementDecision = Field(
+        ..., description="ALLOW | DENY | ABSTAIN — final deterministic gate output"
     )
     risk_score: float = Field(
         ..., ge=0.0, le=1.0, description="Final computed risk score from Sarathi"
@@ -72,15 +68,11 @@ class CoreExecutionResult(BaseModel):
     confidence: float = Field(
         ..., ge=0.0, le=1.0, description="Decision confidence from Sarathi"
     )
+    trace_hash: str = Field(
+        ..., min_length=64, max_length=64, description="SHA-256 trace hash for deterministic replay"
+    )
     failure_reason: Optional[str] = Field(
         None, description="Null on ALLOW. Structured reason on DENY/ABSTAIN."
-    )
-    trace_hash: str = Field(
-        ..., min_length=64, max_length=64,
-        description="SHA-256 trace hash for deterministic replay"
-    )
-    gate_decision: str = Field(
-        ..., description="The raw enforcement verdict (ALLOW/DENY/ABSTAIN)"
     )
 
 
@@ -146,17 +138,15 @@ def submit_proposal(
         )
         result = CoreExecutionResult(
             execution_id=execution_id,
-            execution_decision=EnforcementDecision.DENY,
-            executed=False,
+            enforcement_decision=EnforcementDecision.DENY,
             risk_score=0.0,
             confidence=0.0,
-            failure_reason=f"Execution ID mismatch: pipeline sent '{execution_id}' but Sarathi returned '{sarathi_response.execution_id}'. Execution rejected.",
             trace_hash=sarathi_response.trace_hash,
-            gate_decision="DENY",
+            failure_reason=f"Execution ID mismatch: pipeline sent '{execution_id}' but Sarathi returned '{sarathi_response.execution_id}'. Execution rejected."
         )
         emit_enforcement_telemetry(
             execution_id=result.execution_id,
-            enforcement_decision=result.execution_decision.value,
+            enforcement_decision=result.enforcement_decision.value,
             risk_score=result.risk_score,
             confidence=result.confidence,
             trace_hash=result.trace_hash,
@@ -187,34 +177,30 @@ def submit_proposal(
         )
         result = CoreExecutionResult(
             execution_id=execution_id,
-            execution_decision=EnforcementDecision.DENY,
-            executed=False,
+            enforcement_decision=EnforcementDecision.DENY,
             risk_score=0.0,
             confidence=0.0,
-            failure_reason=f"Enforcement hard failure: {e.code} — {e.message}",
             trace_hash=sarathi_response.trace_hash,
-            gate_decision="DENY",
+            failure_reason=f"Enforcement hard failure: {e.code} — {e.message}"
         )
         emit_enforcement_telemetry(
             execution_id=result.execution_id,
-            enforcement_decision=result.execution_decision.value,
+            enforcement_decision=result.enforcement_decision.value,
             risk_score=result.risk_score,
             confidence=result.confidence,
             trace_hash=result.trace_hash,
         )
         return result
 
-    # Step 5: Core maps enforcement verdict to execution outcome
-    # Core owns this mapping — NOT the enforcement gate.
+    # Step 5: Route Enforcement Core Decision (Execution map decoupled to clients)
     if verdict.verdict == "ALLOW":
         core_decision = EnforcementDecision.ALLOW
-        executed = True
+    elif verdict.verdict == "ABSTAIN":
+        core_decision = EnforcementDecision.ABSTAIN
     else:
         core_decision = EnforcementDecision.DENY
-        executed = False
 
-    # Step 6: Core records to Bucket (Core owns this — NOT enforcement)
-    # Write only to External API
+    # Step 6: Core records to Bucket
     write_execution_record(
         execution_id=execution_id,
         decision=core_decision.value,
@@ -226,26 +212,23 @@ def submit_proposal(
         failure_reason=verdict.reasoning,
     )
 
-    # Step 7: Build result
+    # Step 7: Build Phase 8 result
     result = CoreExecutionResult(
         execution_id=execution_id,
-        execution_decision=core_decision,
-        executed=executed,
+        enforcement_decision=core_decision,
         risk_score=sarathi_response.risk_score,
         confidence=sarathi_response.confidence,
-        failure_reason=verdict.reasoning,
         trace_hash=sarathi_response.trace_hash,
-        gate_decision=verdict.verdict,
+        failure_reason=verdict.reasoning,
     )
 
     logger.info(
-        f"Core execution result: {core_decision.value} | executed={executed}",
+        f"Core execution result: {core_decision.value}",
         extra={
             "event_type": "core_execution_result",
             "execution_id": execution_id,
             "enforcement_verdict": verdict.verdict,
-            "core_decision": core_decision.value,
-            "executed": executed,
+            "enforcement_decision": core_decision.value,
             "risk_score": sarathi_response.risk_score,
             "trace_hash": sarathi_response.trace_hash,
         },
@@ -253,7 +236,7 @@ def submit_proposal(
 
     emit_enforcement_telemetry(
         execution_id=result.execution_id,
-        enforcement_decision=result.execution_decision.value,
+        enforcement_decision=result.enforcement_decision.value,
         risk_score=result.risk_score,
         confidence=result.confidence,
         trace_hash=result.trace_hash,
