@@ -1,190 +1,244 @@
-# REVIEW_PACKET.md — BHIV Enforcement Gateway
+# REVIEW_PACKET.md — BHIV Sovereign Enforcement Ecosystem
 
 **Author:** Rajaryan Verma  
-**System:** Text Risk Scoring / Enforcement Gateway  
-**Layers:** Layer 1 (Governance) + Layer 4 (Execution)  
-**Date:** 2026-03-26
+**System:** Text Risk Scoring / Sovereign Enforcement Gateway  
+**Architecture:** 6-Layer Sovereign Decomposition  
+**Date:** 2026-04-03 (Updated)
 
 ---
 
-## 1. ENTRY POINT
+## 1. ARCHITECTURE OVERVIEW
+
+The BHIV Enforcement Ecosystem is a **6-layer sovereign architecture** where each layer has immutable authority boundaries. No layer may exceed its jurisdiction. The system enforces a **zero-intelligence, deterministic pass-through** enforcement model.
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Layer 2: Sūtradhāra Control Plane                         │
+│  (Agent Registry + KSML Input Gate + Execution ID Provisioning)
+│  File: sutradhara_control_plane.py                         │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 1: Sarathi Governance Engine                        │
+│  (Risk Analysis + DGIC Modifiers + Deterministic Decision) │
+│  File: layer1_sarathi.py                                   │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 3: DGIC (Deterministic Graph Intelligence Core)     │
+│  (Snapshot Ingestion + Seal Verification + Entropy Bounds)  │
+│  File: layer3_dgic.py                                      │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 4: Core Execution Pipeline + Enforcement Gate       │
+│  (Submit → Evaluate → Enforce → Record → Emit)             │
+│  Files: layer4_core.py, layer4_enforcement.py              │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 5: Bucket (External API Persistence)                │
+│  (Zero local state — all writes via external API)          │
+│  File: layer5_bucket.py                                    │
+├─────────────────────────────────────────────────────────────┤
+│  Layer 6: InsightBridge (Telemetry + Signal Aggregation)   │
+│  (Enforcement telemetry emission — no silent execution)    │
+│  File: layer6_insightbridge.py                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Sovereign Core Laws
+
+| Law | Enforcement |
+|-----|-------------|
+| **Zero Local State** | All persistence via external Bucket API. No in-memory ledger. |
+| **No Silent Execution** | Every terminal decision emits InsightBridge telemetry. |
+| **Execution ID Continuity** | A single `execution_id` propagates end-to-end. Mismatch = hard fail. |
+| **KSML-Only Input** | All perimeter input must be a valid `KSMLInput` schema. Raw kwargs rejected. |
+| **No Execution Flags** | Output contains `enforcement_decision` only. No `executed` bool. No action triggers. |
+| **Agent Registration** | All agents must be registered with explicit `NO_EXECUTION_RIGHTS`. |
+
+---
+
+## 2. ENTRY POINT
 
 **File:** `app/main.py`  
 **Server:** FastAPI (`BHIV Enforcement Gateway`)
 
-All enforcement actions enter via HTTP endpoints:
-
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
 | `/api/v1/enforce/evaluate_action` | POST | Canonical enforcement evaluation |
-| `/api/v1/core/submit_proposal` | POST | Core execution gate (submit → evaluate → execute) |
-| `/api/v1/bucket/entries` | GET | List bucket ledger entries |
+| `/api/v1/core/submit_proposal` | POST | Core execution gate (submit → evaluate → enforce → record → emit) |
+| `/api/v1/bucket/entries` | GET | List bucket entries (external API) |
 | `/api/v1/bucket/replay/{trace_hash}` | POST | Replay-verify a specific decision |
 | `/api/v1/bucket/replay_all` | POST | Replay-verify entire ledger |
 
 ---
 
-## 2. CORE EXECUTION FLOW (3 files)
+## 3. CORE EXECUTION FLOW
 
-### File 1: `app/enforcement_gate.py` — Enforcement Entry
-- Receives `EvaluateActionRequest` (action_id, actor, proposed_action, context_signals, dgic_epistemic_state, source_system)
-- Ingests DGIC snapshot → verifies cryptographic seal → classifies entropy boundary
-- Analyzes proposed action text for risk
-- Aggregates context signals deterministically (InsightBridge / Marine / AIAIC / C4S adapters)
-- Produces `EvaluateActionResponse` with decision: `ALLOW` / `DENY` / `ABSTAIN`
-- Writes to in-memory ledger AND persistent bucket ledger
-- Computes SHA-256 `trace_hash` for replay verification
+### Sūtradhāra Control Plane → Core Pipeline
 
-### File 2: `app/core_execution_gate.py` — Decision Intake + Execution Layer
-- Receives `CoreActionProposal` from any BHIV system
-- Calls `enforcement_gate.evaluate_action()`
-- Maps gate decision to Core output:
-  - `ALLOW` → execute
-  - `DENY` (high risk) → `BLOCK`
-  - `DENY` (ambiguous) → `ESCALATE`
-  - `ABSTAIN` (unknown state) → `REQUEST_MORE_DATA`
-  - `ABSTAIN` (seal failure) → `BLOCK`
-- Sets `executed = True` ONLY on `ALLOW`
-- Returns `CoreExecutionResult` with `execution_id` = `proposal_id`
-
-### File 3: `app/bucket_ledger.py` — Persistent Action Record
-- Appends each decision to `data/enforcement_bucket.jsonl`
-- Each entry contains:
-  - `bucket_id` (UUID)
-  - `action_id`
-  - `input_snapshot_hash` (SHA-256 of ALL inputs)
-  - `decision`, `risk_score`, `confidence`, `failure_reason`
-  - `trace_hash` (deterministic replay key)
-  - `trace_lineage` (previous `bucket_id` → current, or `GENESIS`)
-  - `replay_proof` (SHA-256 of full entry for tamper detection)
+```
+  KSMLInput (Phase 6)
+       │
+       ▼
+  invoke_agent()                    ← sutradhara_control_plane.py
+  ├── Validate KSMLInput schema (reject non-KSML)
+  ├── verify_agent_capabilities()   (Phase 7: prove NO_EXECUTION_RIGHTS)
+  ├── verify_agent()                (SourceSystem enum match)
+  ├── provision_execution_id()      (canonical ID for full pipeline)
+  └── Unpack metadata → submit_proposal()
+       │
+       ▼
+  submit_proposal()                 ← layer4_core.py
+  ├── Build EvaluateActionRequest
+  ├── Sarathi evaluate_action()     ← layer1_sarathi.py (Layer 1 governance)
+  │    ├── ingest_dgic_snapshot()   ← layer3_dgic.py (seal verify + freeze)
+  │    ├── adapt_dgic()             (epistemic state → scoring modifiers)
+  │    ├── analyze_text()           (keyword risk scoring)
+  │    ├── aggregate_context_signals() (InsightBridge/Marine/AIAIC/C4S)
+  │    └── Return SarathiEvaluateResponse (ALLOW/DENY/ABSTAIN)
+  ├── EXECUTION ID GUARD            (Phase 4: mismatch = hard DENY)
+  ├── enforce()                     ← layer4_enforcement.py (pure gate)
+  │    ├── Validate Sarathi decision exists
+  │    ├── Validate execution_id match
+  │    ├── Validate DGIC snapshot present
+  │    └── Return EnforcementVerdict (pass-through, no intelligence)
+  ├── write_execution_record()      ← layer5_bucket.py (external API only)
+  ├── emit_enforcement_telemetry()  ← layer6_insightbridge.py (Phase 5)
+  └── Return CoreExecutionResult
+```
 
 ---
 
-## 3. LIVE FLOW
+## 4. CLEAN DECISION CONTRACT (Phase 8)
 
-```
-DGIC Epistemic State
-      │
-      ▼
- ingest_dgic_snapshot()          ← app/dgic_snapshot_consumer.py
- (seal verify, entropy classify, freeze snapshot)
-      │
-      ▼
- evaluate_action()               ← app/enforcement_gate.py
- (risk analysis + signal aggregation + deterministic decision)
-      │
-      ├── record_decision()      ← app/enforcement_ledger.py (in-memory)
-      └── write_bucket_entry()   ← app/bucket_ledger.py (persistent JSONL)
-      │
-      ▼
- submit_proposal()               ← app/core_execution_gate.py
- (map gate decision → Core output → execute only on ALLOW)
-      │
-      ▼
- verify_bucket_entry()           ← app/replay_verifier.py
- (re-evaluate stored payload → prove byte-identical outcome)
-```
+The **final enforcement output** is strictly shaped. No execution flags. No action triggers.
 
-### Real Execution Example
-
-**Input:**
 ```json
 {
-  "proposal_id": "PROOF-001",
-  "actor": "review-agent",
-  "proposed_action": "Generate compliance report",
-  "source_system": "MARINE_INTELLIGENCE",
-  "dgic_epistemic_state": {
-    "epistemic_state": "KNOWN",
-    "entropy_score": 0.15,
-    "contradiction_flag": false
-  },
-  "context_signals": [
-    {"signal_id": "sig-1", "source": "MARINE_INTELLIGENCE", "signal_type": "weather_anomaly", "value": 0.4}
-  ]
-}
-```
-
-**Output:**
-```json
-{
-  "proposal_id": "PROOF-001",
-  "execution_decision": "ALLOW",
-  "executed": true,
-  "risk_score": 0.4,
+  "execution_id": "exec-abc123def456",
+  "enforcement_decision": "ALLOW",
+  "risk_score": 0.0,
   "confidence": 1.0,
-  "failure_reason": null,
   "trace_hash": "8b86fa098ee8e96df393042370e65cf5fe51734cdc6578d3501c3eba7bb90bbe",
-  "gate_decision": "ALLOW"
+  "failure_reason": null
 }
 ```
 
-**Trace:**
-- Ledger: `action_id=PROOF-001 decision=ALLOW trace_hash=8b86fa098ee8e96d...`
-- Bucket: `bucket_id=84dd8d9f... lineage=GENESIS replay_proof=a1641cc65ef03c19...`
-- Replay: `match=True replay_proof_valid=True original=ALLOW replayed=ALLOW`
+| Field | Type | Description |
+|-------|------|-------------|
+| `execution_id` | `str` | Global unique execution identifier, propagated end-to-end |
+| `enforcement_decision` | `ALLOW \| DENY \| ABSTAIN` | The deterministic terminal gate decision |
+| `risk_score` | `float [0.0, 1.0]` | Final computed risk score from Sarathi |
+| `confidence` | `float [0.0, 1.0]` | Decision confidence, scaled by epistemic state |
+| `trace_hash` | `str (64 chars)` | SHA-256 of all inputs — deterministic replay key |
+| `failure_reason` | `str \| null` | Null on ALLOW. Structured reason on DENY/ABSTAIN |
+
+**Prohibited fields:** `executed`, `gate_decision`, `action_trigger`, `execution_flag`.
 
 ---
 
-## 4. WHAT YOU BUILT
+## 5. KSML INPUT SCHEMA (Phase 6)
 
-| Phase | What Changed | Files |
-|-------|-------------|-------|
-| Phase 2 | Canonical `/evaluate_action` API with strict Pydantic schemas | `enforcement_schemas.py`, `enforcement_gate.py`, `main.py` |
-| Phase 3 | Formal DGIC snapshot ingestion with seal verification, entropy classification, immutability freeze | `dgic_snapshot_consumer.py`, `enforcement_gate.py` |
-| Phase 4 | InsightBridge signal weighted aggregation (security_alert 1.0, policy_violation 0.8, etc.) | `insightbridge_rules.py`, `enforcement_gate.py` |
-| Phase 5 | Core execution gate: submit → evaluate → map → execute only on ALLOW. Added BLOCK/ESCALATE/REQUEST_MORE_DATA | `core_execution_gate.py`, `enforcement_schemas.py`, `main.py` |
-| Phase 6 | Persistent bucket ledger (JSONL), input snapshot hashing, trace lineage chain, replay verification tool | `bucket_ledger.py`, `replay_verifier.py`, `enforcement_gate.py`, `main.py` |
-| Phase 7 | Marine/AIAIC/C4S signal adapters with deterministic weighting | `marine_rules.py`, `aiaic_rules.py`, `c4s_rules.py`, `enforcement_gate.py` |
+All perimeter input must conform to the KSML canonical envelope:
+
+```json
+{
+  "execution_id": "exec-abc123def456",
+  "structured_signals": [
+    {"signal_id": "sig-1", "signal_type": "weather_anomaly", "value": 0.4, "source": "MARINE_INTELLIGENCE"}
+  ],
+  "metadata": {
+    "actor": "review-agent",
+    "proposed_action": "Generate compliance report",
+    "source_system": "MARINE_INTELLIGENCE",
+    "dgic_epistemic_state": {
+      "epistemic_state": "KNOWN",
+      "entropy_score": 0.15,
+      "contradiction_flag": false,
+      "lineage_hash": "a1b2c3...64chars",
+      "envelope_hash": "d4e5f6...64chars"
+    }
+  }
+}
+```
+
+**Validation:** The `metadata` block **must** contain `actor`, `proposed_action`, `source_system`, and `dgic_epistemic_state`. Missing fields trigger immediate `KSMLSchemaViolation`.
 
 ---
 
-## 5. FAILURE CASES
+## 6. SŪTRADHĀRA AGENT REGISTRY (Phase 7)
+
+| Agent ID | Capability | Permissions |
+|----------|-----------|-------------|
+| `enforcement_gate_v1` | `enforcement_gate` | `READ_ONLY`, `NO_EXECUTION_RIGHTS`, `NO_SYSTEM_ACCESS` |
+
+**Proof of boundary:** Before every invocation, `verify_agent_capabilities()` asserts that the agent holds `NO_EXECUTION_RIGHTS`. Failure raises `ControlPlaneHardFailure`.
+
+---
+
+## 7. INSIGHTBRIDGE TELEMETRY (Phase 5)
+
+Every terminal enforcement decision emits structured telemetry via `emit_enforcement_telemetry()`:
+
+```json
+{
+  "event_type": "insightbridge_enforcement_emission",
+  "execution_id": "exec-abc123def456",
+  "enforcement_decision": "ALLOW",
+  "risk_score": 0.0,
+  "confidence": 1.0,
+  "trace_hash": "8b86fa098ee8e96d..."
+}
+```
+
+**Coverage:** All exit paths in `submit_proposal()` — including ALLOW, DENY, hard failures, and execution_id mismatches — emit telemetry before returning. **No silent execution is possible.**
+
+---
+
+## 8. PHASE HISTORY
+
+| Phase | What Changed | Key Files |
+|-------|-------------|-----------|
+| Phase 1–2 | Canonical `/evaluate_action` API with strict Pydantic schemas | `enforcement_schemas.py`, `main.py` |
+| Phase 3 | Bucket decoupled — in-memory ledger removed, external API persistence only | `layer5_bucket.py`, `layer4_core.py` |
+| Phase 4 | Execution ID boundary enforcement — mismatch = hard fail | `layer4_enforcement.py`, `layer4_core.py`, `sutradhara_control_plane.py` |
+| Phase 5 | InsightBridge telemetry emission — no silent execution | `layer6_insightbridge.py`, `layer4_core.py` |
+| Phase 6 | KSML input compliance — raw inputs rejected, strict schema enforced | `enforcement_schemas.py`, `sutradhara_control_plane.py` |
+| Phase 7 | Sūtradhāra agent registration — capabilities proven before invocation | `sutradhara_control_plane.py` |
+| Phase 8 | Clean Decision Contract — `executed` flag removed, no action triggers | `layer4_core.py`, `enforcement_schemas.py` |
+
+---
+
+## 9. FAILURE CASES
 
 | Case | Trigger | System Response |
 |------|---------|----------------|
-| **DGIC seal tampered** | `envelope_hash` does not match recomputed hash | `ABSTAIN` → Core maps to `BLOCK`. Logged as `DGIC_SEAL_VERIFICATION_FAILED` |
-| **CRITICAL entropy** | `entropy_score >= 0.7` | `DENY` with reason `CRITICAL entropy boundary`. Core maps to `BLOCK` |
-| **AMBIGUOUS epistemic state** | `epistemic_state = AMBIGUOUS` + medium risk | `DENY` with reason `AMBIGUOUS epistemic uncertainty`. Core maps to `ESCALATE` |
-| **UNKNOWN epistemic state** | `epistemic_state = UNKNOWN` | `ABSTAIN` with reason `no grounded evidence`. Core maps to `REQUEST_MORE_DATA` |
-| **High risk score** | `risk_score >= 0.7` | `DENY` with structured failure reason. Core maps to `BLOCK` |
-| **Snapshot integrity violation** | Snapshot fields mutated during processing | `DGICSnapshotError` raised. Decision aborted |
-| **Bucket replay proof invalid** | Stored entry data tampered after write | `replay_proof_valid = False` when replaying |
-| **Invalid source system** | Unknown `source_system` string | Pydantic validation rejects request with 422 |
+| **Non-KSML input** | Raw dict or kwargs passed to `invoke_agent()` | `ControlPlaneHardFailure: NON_KSML_INPUT_DETACHED` |
+| **Unregistered agent** | Unknown `source_system` string | `AgentVerificationError` — invocation blocked |
+| **Agent lacks capability** | Missing `NO_EXECUTION_RIGHTS` | `ControlPlaneHardFailure` — boundary violation |
+| **Execution ID mismatch** | Sarathi returns different `execution_id` | Hard `DENY` with structured failure reason + telemetry emission |
+| **DGIC seal tampered** | `envelope_hash` does not match recomputed hash | Sarathi `ABSTAIN` → Core `ABSTAIN` with failure reason |
+| **CRITICAL entropy** | `entropy_score >= 0.7` | Sarathi `DENY` — action denied as fail-safe |
+| **AMBIGUOUS + elevated risk** | `epistemic_state = AMBIGUOUS` + `risk >= 0.3` | Sarathi `DENY` — cannot allow under epistemic uncertainty |
+| **UNKNOWN epistemic state** | `epistemic_state = UNKNOWN` | Sarathi `ABSTAIN` → Core `ABSTAIN` — no grounded evidence |
+| **High risk score** | `risk_score >= 0.7` | Sarathi `DENY` with structured failure reason |
+| **Enforcement hard failure** | Missing Sarathi decision, trace hash, or DGIC snapshot | `EnforcementHardFailure` raised, Core returns `DENY` |
+| **Control Plane ID corruption** | Core returns different `execution_id` than provisioned | `ControlPlaneHardFailure: EXECUTION_ID_CORRUPTION` |
 
 ---
 
-## 6. PROOF
+## 10. PROOF
 
-### Execution Trace
-```
-=== CORE EXECUTION RESULT ===
+### Clean Decision Contract Output
+```json
 {
-  "proposal_id": "PROOF-001",
-  "execution_decision": "ALLOW",
-  "executed": true,
-  "risk_score": 0.4,
+  "execution_id": "PROOF-001",
+  "enforcement_decision": "ALLOW",
+  "risk_score": 0.0,
   "confidence": 1.0,
-  "failure_reason": null,
   "trace_hash": "8b86fa098ee8e96df393042370e65cf5fe51734cdc6578d3501c3eba7bb90bbe",
-  "gate_decision": "ALLOW"
+  "failure_reason": null
 }
-
-=== LEDGER ENTRIES: 1 ===
-  action_id=PROOF-001 decision=ALLOW trace_hash=8b86fa098ee8e96d...
-
-=== BUCKET ENTRIES: 1 ===
-  bucket_id=84dd8d9f... action_id=PROOF-001 decision=ALLOW lineage=GENESIS replay_proof=a1641cc65ef03c19...
-
-=== REPLAY VERIFICATION ===
-  match=True
-  replay_proof_valid=True
-  original=ALLOW replayed=ALLOW
 ```
 
 ### Test Suite
 ```
-395 passed in 25.02s
+408 passed in 64s
 ```
 
 Command: `python -m pytest tests/ --tb=short`
@@ -194,3 +248,39 @@ Same `trace_hash` on replay confirms byte-identical determinism:
 - Original: `8b86fa098ee8e96df393042370e65cf5fe51734cdc6578d3501c3eba7bb90bbe`
 - Replayed: `8b86fa098ee8e96df393042370e65cf5fe51734cdc6578d3501c3eba7bb90bbe`
 - Match: `True`
+
+### Sovereign Boundary Proof
+- `CoreExecutionResult` contains **no** `executed` field — verified by schema inspection
+- `ExecuteActionResponse` contains **no** `executed` field — verified by schema inspection
+- Enforcement gate has `NO_EXECUTION_RIGHTS` — verified by registry assertion test
+- All terminal paths emit InsightBridge telemetry — verified by 408 passing tests
+- Non-KSML input is rejected — verified by `test_sutradhara_control_plane.py`
+
+---
+
+## 11. FILE MAP
+
+### Core Pipeline
+| File | Layer | Purpose |
+|------|-------|---------|
+| `sutradhara_control_plane.py` | L2 | Agent registry, KSML validation, execution_id provisioning |
+| `layer1_sarathi.py` | L1 | Risk analysis, DGIC modifiers, deterministic governance decision |
+| `layer3_dgic.py` | L3 | DGIC snapshot ingestion, seal verification, entropy classification |
+| `layer4_core.py` | L4 | Core submission pipeline, enforcement orchestration |
+| `layer4_enforcement.py` | L4 | Pure enforcement gate (pass-through, no intelligence) |
+| `layer5_bucket.py` | L5 | External API persistence (zero local state) |
+| `layer6_insightbridge.py` | L6 | Telemetry emission, signal aggregation |
+
+### Signal Adapters
+| File | Purpose |
+|------|---------|
+| `insightbridge_rules.py` | InsightBridge weighted signal calculation |
+| `marine_rules.py` | Marine Intelligence signal weighting |
+| `aiaic_rules.py` | AIAIC Agricultural Intelligence signal weighting |
+| `c4s_rules.py` | C4S Strategic Simulation signal weighting |
+
+### Schemas & Contracts
+| File | Purpose |
+|------|---------|
+| `enforcement_schemas.py` | Pydantic models: `KSMLInput`, `EvaluateActionRequest`, `ExecuteActionResponse`, `CoreExecutionResult` |
+| `contract_enforcement.py` | Contract enforcement rules |
