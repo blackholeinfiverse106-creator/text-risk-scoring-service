@@ -34,30 +34,6 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================
-# Enforcement Verdict — The ONLY output of this gate
-# ============================================================
-
-@dataclass(frozen=True)
-class EnforcementVerdict:
-    """
-    The immutable enforcement verdict.
-
-    This is the ONLY output the enforcement gate produces.
-    No execution mapping. No bucket writes. No intelligence.
-
-    Fields:
-        execution_id : Propagated from Sarathi decision.
-        verdict      : ALLOW | DENY | ABSTAIN — pass-through of Sarathi decision.
-        reasoning    : Structured enforcement reasoning.
-        trace_hash   : Propagated from Sarathi decision for replay verification.
-    """
-    execution_id: str
-    verdict: str      # ALLOW | DENY | ABSTAIN
-    reasoning: Optional[str]
-    trace_hash: str
-
-
-# ============================================================
 # Enforcement Errors — Hard Failures
 # ============================================================
 
@@ -88,29 +64,30 @@ def enforce(
     original_execution_id: str,
     sarathi_decision: Optional[str],
     sarathi_execution_id: Optional[str],
-    sarathi_trace_hash: Optional[str],
-    sarathi_failure_reason: Optional[str],
+    sarathi_confidence: Optional[float],
     dgic_snapshot: Optional[Dict[str, Any]],
-) -> EnforcementVerdict:
+) -> Dict[str, Any]:
     """
     The pure enforcement gate.
 
     Accepts ONLY:
       - Sarathi-approved decision (ALLOW / DENY / ABSTAIN)
       - Sarathi execution_id (for propagation)
-      - Sarathi trace_hash (for replay verification)
-      - Sarathi failure_reason (for reasoning propagation)
+      - Sarathi confidence (for metadata trace)
       - DGIC snapshot dict (epistemic context — read-only, not interpreted)
 
     Returns ONLY:
-      - EnforcementVerdict with verdict + reasoning
+      {
+        "execution_id": "...",
+        "enforcement_decision": "ALLOW | DENY | ABSTAIN",
+        "confidence": 0.0
+      }
 
     HARD FAILS if:
       - Sarathi decision is missing or None
       - Sarathi decision is not a valid verdict
       - Sarathi execution_id is missing
       - Original execution_id does not exactly match Sarathi execution_id
-      - Sarathi trace_hash is missing
       - DGIC snapshot is missing or None
 
     This function NEVER:
@@ -166,17 +143,6 @@ def enforce(
             f"Sarathi execution_id ({sarathi_execution_id}) does not match original request ({original_execution_id}). Potential identifier leakage.",
         )
 
-    # ── HARD FAIL: Sarathi trace_hash missing ──
-    if not sarathi_trace_hash:
-        logger.error(
-            "ENFORCEMENT HARD FAIL: Sarathi trace_hash is missing",
-            extra={"event_type": "enforcement_hard_fail", "code": "TRACE_HASH_MISSING"},
-        )
-        raise EnforcementHardFailure(
-            "TRACE_HASH_MISSING",
-            "Sarathi trace_hash is required for replay verification.",
-        )
-
     # ── HARD FAIL: DGIC snapshot missing ──
     if dgic_snapshot is None:
         logger.error(
@@ -189,15 +155,7 @@ def enforce(
         )
 
     # ── Pure pass-through: NO interpretation ──
-    # The Sarathi decision IS the enforcement verdict.
-    # No mapping. No re-interpretation. No intelligence.
     verdict = sarathi_decision
-
-    # Build structured reasoning
-    if verdict == "ALLOW":
-        reasoning = None  # No reasoning needed for ALLOW
-    else:
-        reasoning = sarathi_failure_reason or f"Sarathi governance decision: {verdict}"
 
     logger.info(
         f"Enforcement verdict: {verdict}",
@@ -205,13 +163,11 @@ def enforce(
             "event_type": "enforcement_verdict",
             "execution_id": sarathi_execution_id,
             "verdict": verdict,
-            "trace_hash": sarathi_trace_hash,
         },
     )
 
-    return EnforcementVerdict(
-        execution_id=sarathi_execution_id,
-        verdict=verdict,
-        reasoning=reasoning,
-        trace_hash=sarathi_trace_hash,
-    )
+    return {
+        "execution_id": sarathi_execution_id,
+        "enforcement_decision": verdict,
+        "confidence": float(sarathi_confidence or 0.0),
+    }

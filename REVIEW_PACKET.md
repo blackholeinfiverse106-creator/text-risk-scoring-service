@@ -47,7 +47,8 @@ The BHIV Enforcement Ecosystem is a **6-layer sovereign architecture** where eac
 | **No Silent Execution** | Every terminal decision emits InsightBridge telemetry. |
 | **Execution ID Continuity** | A single `execution_id` propagates end-to-end. Mismatch = hard fail. |
 | **KSML-Only Input** | All perimeter input must be a valid `KSMLInput` schema. Raw kwargs rejected. |
-| **No Execution Flags** | Output contains `enforcement_decision` only. No `executed` bool. No action triggers. |
+| **Core Execution Ownership** | Core executes `execute_action()` or `block_execution()` explicitly based on Enforcement payload. |
+| **Enforcement Gate Passivity** | Enforcement purely gates execution; it does not trigger actions, store data, or orchestrate traces. |
 | **Agent Registration** | All agents must be registered with explicit `NO_EXECUTION_RIGHTS`. |
 
 ---
@@ -96,7 +97,10 @@ The BHIV Enforcement Ecosystem is a **6-layer sovereign architecture** where eac
   │    ├── Validate Sarathi decision exists
   │    ├── Validate execution_id match
   │    ├── Validate DGIC snapshot present
-  │    └── Return EnforcementVerdict (pass-through, no intelligence)
+  │    └── Return Dict {execution_id, enforcement_decision, confidence}
+  ├── evaluate gate output          (Phase 9: Real Execution Boundary)
+  │    ├── If ALLOW → execute_action()
+  │    └── If DENY or ABSTAIN → block_execution()
   ├── write_execution_record()      ← layer5_bucket.py (external API only)
   ├── emit_enforcement_telemetry()  ← layer6_insightbridge.py (Phase 5)
   └── Return CoreExecutionResult
@@ -200,7 +204,8 @@ Every terminal enforcement decision emits structured telemetry via `emit_enforce
 | Phase 5 | InsightBridge telemetry emission — no silent execution | `layer6_insightbridge.py`, `layer4_core.py` |
 | Phase 6 | KSML input compliance — raw inputs rejected, strict schema enforced | `enforcement_schemas.py`, `sutradhara_control_plane.py` |
 | Phase 7 | Sūtradhāra agent registration — capabilities proven before invocation | `sutradhara_control_plane.py` |
-| Phase 8 | Clean Decision Contract — `executed` flag removed, no action triggers | `layer4_core.py`, `enforcement_schemas.py` |
+| Phase 8 | Clean Decision Contract — `executed` flag removed, strict enforcement dict payload | `layer4_core.py`, `enforcement_schemas.py`, `layer4_enforcement.py` |
+| Phase 9 | Core Execution Ownership — `execute_action()` / `block_execution()` explicitly directed by Core | `layer4_core.py` |
 
 ---
 
@@ -217,7 +222,9 @@ Every terminal enforcement decision emits structured telemetry via `emit_enforce
 | **AMBIGUOUS + elevated risk** | `epistemic_state = AMBIGUOUS` + `risk >= 0.3` | Sarathi `DENY` — cannot allow under epistemic uncertainty |
 | **UNKNOWN epistemic state** | `epistemic_state = UNKNOWN` | Sarathi `ABSTAIN` → Core `ABSTAIN` — no grounded evidence |
 | **High risk score** | `risk_score >= 0.7` | Sarathi `DENY` with structured failure reason |
-| **Enforcement hard failure** | Missing Sarathi decision, trace hash, or DGIC snapshot | `EnforcementHardFailure` raised, Core returns `DENY` |
+| **Sarathi missing** | Failure in governance processing | Core throws `System Rejected` before enforcement |
+| **Enforcement missing / Invalid** | Decision dict corrupted or non-dict | Core throws `Core Rejected: Invalid/Missing enforcement output` |
+| **Enforcement hard failure** | Missing Sarathi decision or DGIC snapshot | `EnforcementHardFailure` raised, Core blocks action, Core returns `DENY` |
 | **Control Plane ID corruption** | Core returns different `execution_id` than provisioned | `ControlPlaneHardFailure: EXECUTION_ID_CORRUPTION` |
 
 ---
@@ -249,12 +256,18 @@ Same `trace_hash` on replay confirms byte-identical determinism:
 - Replayed: `8b86fa098ee8e96df393042370e65cf5fe51734cdc6578d3501c3eba7bb90bbe`
 - Match: `True`
 
+### Real Execution Ownership Proof
+Core actively converts the zero-intelligence Gate response (`ALLOW`/`DENY`/`ABSTAIN`) into real-world mapping via explicitly triggering pipeline endpoints:
+- **`ALLOW`:** Outputs `Actions: [EXECUTE_ACTION] triggered`
+- **`DENY` / `ABSTAIN`:** Outputs `Actions: [BLOCK_EXECUTION] triggered`
+
 ### Sovereign Boundary Proof
 - `CoreExecutionResult` contains **no** `executed` field — verified by schema inspection
 - `ExecuteActionResponse` contains **no** `executed` field — verified by schema inspection
 - Enforcement gate has `NO_EXECUTION_RIGHTS` — verified by registry assertion test
 - All terminal paths emit InsightBridge telemetry — verified by 408 passing tests
 - Non-KSML input is rejected — verified by `test_sutradhara_control_plane.py`
+- Sūtradhāra → DGIC → Sarathi → Enforcement → Core shares strict `execution_id` continuity — mismatch abruptly halts execution
 
 ---
 

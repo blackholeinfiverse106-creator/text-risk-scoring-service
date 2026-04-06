@@ -40,8 +40,9 @@ from app.enforcement_schemas import (
 )
 from app.layer1_sarathi import evaluate_action as sarathi_evaluate
 from app.layer5_bucket import write_execution_record
-from app.layer4_enforcement import enforce, EnforcementVerdict, EnforcementHardFailure
+from app.layer4_enforcement import enforce, EnforcementHardFailure
 from app.layer6_insightbridge import emit_enforcement_telemetry
+from app.execution_controller import execute_action, block_execution
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +125,18 @@ def submit_proposal(
 
     # Step 2: Sarathi governance evaluation (Layer 1 — Aakanksha's decision authority)
     sarathi_response: SarathiEvaluateResponse = sarathi_evaluate(request)
+    
+    # ── HARD FAIL: Sarathi missing (Case 4) ──
+    if sarathi_response is None:
+        logger.error("System reject before enforcement: Sarathi missing")
+        return CoreExecutionResult(
+            execution_id=execution_id,
+            enforcement_decision=EnforcementDecision.DENY,
+            risk_score=0.0,
+            confidence=0.0,
+            trace_hash=execution_id[-64:].ljust(64, '0'),
+            failure_reason="System reject: Sarathi evaluation missing"
+        )
 
     # Step 3: EXECUTION ID GUARD (Phase 6)
     # Verify Sarathi returned the same execution_id we sent
@@ -158,12 +171,11 @@ def submit_proposal(
     dgic_snapshot_dict = dgic_epistemic_state.model_dump(mode="json")
 
     try:
-        verdict: EnforcementVerdict = enforce(
+        verdict = enforce(
             original_execution_id=execution_id,
             sarathi_decision=sarathi_response.sarathi_decision.value,
             sarathi_execution_id=sarathi_response.execution_id,
-            sarathi_trace_hash=sarathi_response.trace_hash,
-            sarathi_failure_reason=sarathi_response.failure_reason,
+            sarathi_confidence=sarathi_response.confidence,
             dgic_snapshot=dgic_snapshot_dict,
         )
     except EnforcementHardFailure as e:
@@ -193,12 +205,45 @@ def submit_proposal(
         return result
 
     # Step 5: Route Enforcement Core Decision (Execution map decoupled to clients)
-    if verdict.verdict == "ALLOW":
+
+    # ── HARD FAIL: Invalid enforcement output (Case 3) ──
+    if not isinstance(verdict, dict):
+        logger.error("Core reject: Invalid enforcement output (not a dict)")
+        return CoreExecutionResult(
+            execution_id=execution_id,
+            enforcement_decision=EnforcementDecision.DENY,
+            risk_score=sarathi_response.risk_score,
+            confidence=sarathi_response.confidence,
+            trace_hash=sarathi_response.trace_hash,
+            failure_reason="Core reject: Invalid enforcement output"
+        )
+
+    enforcement_decision = verdict.get("enforcement_decision")
+
+    # ── HARD FAIL: Enforcement decision missing (Case 1) ──
+    if enforcement_decision is None:
+        logger.error("Core reject: Enforcement decision missing")
+        return CoreExecutionResult(
+            execution_id=execution_id,
+            enforcement_decision=EnforcementDecision.DENY,
+            risk_score=sarathi_response.risk_score,
+            confidence=sarathi_response.confidence,
+            trace_hash=sarathi_response.trace_hash,
+            failure_reason="Core reject: Enforcement decision missing"
+        )
+
+    if enforcement_decision == "ALLOW":
         core_decision = EnforcementDecision.ALLOW
-    elif verdict.verdict == "ABSTAIN":
+        execute_action(proposed_action, execution_id)
+        final_failure_reason = None
+    elif enforcement_decision == "ABSTAIN":
         core_decision = EnforcementDecision.ABSTAIN
+        final_failure_reason = sarathi_response.failure_reason or f"Sarathi governance decision: {enforcement_decision}"
+        block_execution(proposed_action, execution_id, final_failure_reason)
     else:
         core_decision = EnforcementDecision.DENY
+        final_failure_reason = sarathi_response.failure_reason or f"Sarathi governance decision: {enforcement_decision}"
+        block_execution(proposed_action, execution_id, final_failure_reason)
 
     # Step 6: Core records to Bucket
     write_execution_record(
@@ -209,7 +254,7 @@ def submit_proposal(
         trace_hash=sarathi_response.trace_hash,
         request_payload=request.model_dump(mode="json"),
         dgic_snapshot=dgic_snapshot_dict,
-        failure_reason=verdict.reasoning,
+        failure_reason=final_failure_reason,
     )
 
     # Step 7: Build Phase 8 result
@@ -219,7 +264,7 @@ def submit_proposal(
         risk_score=sarathi_response.risk_score,
         confidence=sarathi_response.confidence,
         trace_hash=sarathi_response.trace_hash,
-        failure_reason=verdict.reasoning,
+        failure_reason=final_failure_reason,
     )
 
     logger.info(
@@ -227,7 +272,7 @@ def submit_proposal(
         extra={
             "event_type": "core_execution_result",
             "execution_id": execution_id,
-            "enforcement_verdict": verdict.verdict,
+            "enforcement_verdict": enforcement_decision,
             "enforcement_decision": core_decision.value,
             "risk_score": sarathi_response.risk_score,
             "trace_hash": sarathi_response.trace_hash,

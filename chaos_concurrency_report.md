@@ -1,5 +1,5 @@
 # Chaos Concurrency Report
-**Date:** 2026-04-03T06:12:15Z  
+**Date:** 2026-04-06T11:13:56Z  
 **Status:** ✅ CERTIFIED
 
 ---
@@ -21,7 +21,7 @@
 | Threads completed | 500/500 |
 | Unhandled exceptions | 0 |
 | Invariant violations | 0 |
-| Elapsed time | 1225.2 ms |
+| Elapsed time | 4192.2 ms |
 
 ## Invariant Violation Details
 

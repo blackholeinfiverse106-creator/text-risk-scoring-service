@@ -1,0 +1,68 @@
+﻿
+============================================================
+=================== REAL EXECUTION PROOF ===================
+============================================================
+
+--- CASE 1: ALLOW ---
+  Result : ALLOW
+  Actions: [EXECUTE_ACTION] triggered
+
+--- CASE 2: DENY ---
+  Result : DENY
+  Actions: [BLOCK_EXECUTION] triggered
+  Reason : Risk score 0.99 exceeds governance threshold 0.7
+
+--- CASE 3: ABSTAIN ---
+  Result : ABSTAIN
+  Actions: [BLOCK_EXECUTION] triggered
+  Reason : Epistemic abstention: no grounded evidence available (DGIC UNKNOWN state). Caller must handle conservatively.
+
+
+============================================================
+=============== FAILURE CASES (CORE GUARDS) ================
+============================================================
+
+--- FAILURE CASE 1: Enforcement decision missing ---
+  JSON Output:
+{
+  "execution_id": "fail-001",
+  "enforcement_decision": "DENY",
+  "risk_score": 0.0,
+  "confidence": 1.0,
+  "trace_hash": "8cb068757627584b6cab07ce60bc1889bac9caf442c5a05db890b7e97f2631ae",
+  "failure_reason": "Core reject: Enforcement decision missing"
+}
+
+--- FAILURE CASE 2: execution_id mismatch ---
+  JSON Output:
+{
+  "execution_id": "fail-002",
+  "enforcement_decision": "DENY",
+  "risk_score": 0.0,
+  "confidence": 0.0,
+  "trace_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "failure_reason": "Execution ID mismatch: pipeline sent 'fail-002' but Sarathi returned 'WRONG_ID'. Execution rejected."
+}
+
+--- FAILURE CASE 3: Invalid enforcement output ---
+  JSON Output:
+{
+  "execution_id": "fail-003",
+  "enforcement_decision": "DENY",
+  "risk_score": 0.0,
+  "confidence": 1.0,
+  "trace_hash": "2c875be13664e4bf6b7db32c0a71bd6e860654215416302fcbe7e54729347d48",
+  "failure_reason": "Core reject: Invalid enforcement output"
+}
+
+--- FAILURE CASE 4: Sarathi missing ---
+  JSON Output:
+{
+  "execution_id": "fail-004",
+  "enforcement_decision": "DENY",
+  "risk_score": 0.0,
+  "confidence": 0.0,
+  "trace_hash": "fail-00400000000000000000000000000000000000000000000000000000000",
+  "failure_reason": "System reject: Sarathi evaluation missing"
+}
+
