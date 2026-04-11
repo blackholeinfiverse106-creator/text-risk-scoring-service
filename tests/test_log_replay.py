@@ -2,7 +2,7 @@ import pytest
 import logging
 import io
 import json
-from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 
 def replay_score_from_logs(log_content: str) -> float:
     """

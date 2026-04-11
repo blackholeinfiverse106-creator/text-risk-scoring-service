@@ -1,7 +1,9 @@
 import pytest
 import random
 import string
-from app.layer1_sarathi import analyze_text, RISK_KEYWORDS
+from app.layer0_intelligence import RISK_KEYWORDS
+from app.layer0_intelligence import analyze_text
+from app.layer0_intelligence import RISK_KEYWORDS
 
 def random_string(length=50):
     return ''.join(random.choices(string.ascii_letters + string.digits + " ", k=length))

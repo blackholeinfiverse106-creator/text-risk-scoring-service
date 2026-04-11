@@ -381,7 +381,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
-from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 from app.layer3_dgic import (
     DGICInput,
     DGICAdapterResult,

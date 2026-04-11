@@ -4,7 +4,7 @@ Validates all contract boundaries and invalid input handling
 """
 import pytest
 from app.contract_enforcement import validate_input_contract, validate_output_contract, ContractViolation
-from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 
 class TestInputContractEnforcement:
     """Test input contract validation"""

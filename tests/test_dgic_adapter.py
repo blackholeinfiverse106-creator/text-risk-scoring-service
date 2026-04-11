@@ -35,7 +35,7 @@ from app.layer3_dgic import (
     INFERRED_ENTROPY_SCALING_FACTOR,
     ABSTENTION_ERROR_CODE,
 )
-from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 
 # ──────────────────────────────────────────────────────────────
 # Fixtures

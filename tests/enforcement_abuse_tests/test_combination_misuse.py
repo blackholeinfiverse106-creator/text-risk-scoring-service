@@ -3,7 +3,7 @@ Test: Improper Combination Scenarios
 Validates proper handling of score aggregation and multi-signal use
 """
 import pytest
-from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 
 class TestImproperCombination:
     """Test resistance to improper signal combination"""

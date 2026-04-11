@@ -4,7 +4,7 @@ Validates determinism and proper caching behavior
 """
 import pytest
 import time
-from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 
 class TestCachingMisuse:
     """Test resistance to caching misuse"""

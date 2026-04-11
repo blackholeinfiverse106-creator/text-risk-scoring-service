@@ -6,7 +6,7 @@ Tests that safety_metadata is present and enforced in all responses
 import sys
 sys.path.insert(0, '.')
 
-from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 from app.contract_enforcement import validate_output_contract, ContractViolation
 
 def test_safety_metadata_in_success():

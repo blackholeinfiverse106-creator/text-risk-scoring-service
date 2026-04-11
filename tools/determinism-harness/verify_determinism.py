@@ -11,7 +11,8 @@ from datetime import datetime
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.layer1_sarathi import analyze_text  # Your scoring function
+from app.layer0_intelligence import analyze_text
+# from app.layer1_sarathi import analyze_text  # moved to layer0_intelligence
 
 # -------------------------------------------------
 # LOGGING SETUP
@@ -157,7 +158,8 @@ if __name__ == "__main__":
 # # Add project root to path
 # sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
+# from app.layer1_sarathi import 
 
 # # Configure logging
 # LOG_DIR = "replay-test-logs"

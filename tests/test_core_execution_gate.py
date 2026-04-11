@@ -13,7 +13,7 @@ Sovereign Law Compliance:
 
 import pytest
 import hashlib
-from app.layer4_core import submit_proposal, CoreExecutionResult
+from app.sutradhara_control_plane import invoke_mandala, MandalaInvocationResult
 from app.enforcement_schemas import (
     SarathiDecision,
     EnforcementDecision,
@@ -65,7 +65,7 @@ def _make_dgic_state(
 class TestAllowPath:
     def test_clean_proposal_allows_execution(self):
         """Clean action + KNOWN state → ALLOW, executed=True."""
-        result = submit_proposal(
+        result = invoke_mandala(
             execution_id="prop-001",
             actor="core-agent",
             proposed_action="Generate daily report",
@@ -73,7 +73,7 @@ class TestAllowPath:
             dgic_epistemic_state=_make_dgic_state(),
             source_system=SourceSystem.AI_BEING,
         )
-        assert isinstance(result, CoreExecutionResult)
+        assert isinstance(result, MandalaInvocationResult)
         assert result.enforcement_decision == EnforcementDecision.ALLOW
         assert result.execution_id == "prop-001"
         assert len(result.trace_hash) == 64
@@ -89,7 +89,7 @@ class TestDenyPath:
         signals = [
             ContextSignal(signal_id="threat-1", signal_type="security_alert", value=0.85, source="INSIGHTBRIDGE"),
         ]
-        result = submit_proposal(
+        result = invoke_mandala(
             execution_id="prop-002",
             actor="core-agent",
             proposed_action="Execute system override",
@@ -107,7 +107,7 @@ class TestDenyPath:
         dgic_dict["envelope_hash"] = "a" * 64
         tampered = DGICEpistemicStateInput(**dgic_dict)
         
-        result = submit_proposal(
+        result = invoke_mandala(
             execution_id="prop-003",
             actor="core-agent",
             proposed_action="Normal action",
@@ -120,7 +120,7 @@ class TestDenyPath:
     def test_critical_entropy_denied(self):
         """CRITICAL entropy boundary → Sarathi DENY → Core DENY."""
         dgic = _make_dgic_state(epistemic_state="INFERRED", entropy_score=0.8)
-        result = submit_proposal(
+        result = invoke_mandala(
             execution_id="prop-004",
             actor="core-agent",
             proposed_action="Run system diagnostic",
@@ -136,7 +136,7 @@ class TestDenyPath:
         signals = [
             ContextSignal(signal_id="s1", signal_type="anomaly", value=0.4, source="sensor-a"),
         ]
-        result = submit_proposal(
+        result = invoke_mandala(
             execution_id="prop-005",
             actor="core-agent",
             proposed_action="Execute navigation correction",
@@ -147,9 +147,9 @@ class TestDenyPath:
         assert result.enforcement_decision == EnforcementDecision.DENY
 
     def test_unknown_epistemic_state_denied(self):
-        """UNKNOWN epistemic state → Sarathi ABSTAIN → Core ABSTAIN (no REQUEST_MORE_DATA)."""
+        """UNKNOWN epistemic state → Sarathi ABSTAIN → RAJYA rejects non-ALLOW → DENY."""
         dgic = _make_dgic_state(epistemic_state="UNKNOWN", entropy_score=0.0)
-        result = submit_proposal(
+        result = invoke_mandala(
             execution_id="prop-006",
             actor="core-agent",
             proposed_action="Run diagnostic scan",
@@ -157,7 +157,8 @@ class TestDenyPath:
             dgic_epistemic_state=dgic,
             source_system=SourceSystem.INSIGHTBRIDGE,
         )
-        assert result.enforcement_decision == EnforcementDecision.ABSTAIN
+        assert result.enforcement_decision == EnforcementDecision.DENY
+        assert "RAJYA" in result.failure_reason
 
 
 # ============================================================
@@ -168,7 +169,7 @@ class TestDecisionLogging:
     @patch("app.layer4_core.write_execution_record")
     def test_allow_decision_logged(self, mock_write):
         """ALLOW decisions are recorded in the ledger."""
-        submit_proposal(
+        invoke_mandala(
             execution_id="log-001",
             actor="core-agent",
             proposed_action="Generate report",
@@ -180,10 +181,9 @@ class TestDecisionLogging:
         assert mock_write.call_args[1]["execution_id"] == "log-001"
         assert mock_write.call_args[1]["decision"] == "ALLOW"
 
-    @patch("app.layer4_core.write_execution_record")
-    def test_deny_decision_logged(self, mock_write):
-        """DENY decisions are recorded in the ledger."""
-        submit_proposal(
+    def test_deny_decision_short_circuited_by_rajya(self):
+        """DENY decisions are caught by RAJYA before Core — Core never executes."""
+        result = invoke_mandala(
             execution_id="log-002",
             actor="core-agent",
             proposed_action="kill murder bomb terrorist attack shoot explode",
@@ -191,9 +191,9 @@ class TestDecisionLogging:
             dgic_epistemic_state=_make_dgic_state(),
             source_system=SourceSystem.AI_BEING,
         )
-        mock_write.assert_called_once()
-        assert mock_write.call_args[1]["execution_id"] == "log-002"
-        assert mock_write.call_args[1]["decision"] == "DENY"
+        assert result.enforcement_decision == EnforcementDecision.DENY
+        assert "RAJYA REJECT" in result.failure_reason
+        assert result.execution_id == "log-002"
 
 
 # ============================================================
@@ -202,8 +202,8 @@ class TestDecisionLogging:
 
 class TestResponseStructure:
     def test_response_has_all_fields(self):
-        """CoreExecutionResult contains all required fields."""
-        result = submit_proposal(
+        """MandalaInvocationResult contains all required fields."""
+        result = invoke_mandala(
             execution_id="struct-001",
             actor="core-agent",
             proposed_action="Test action",

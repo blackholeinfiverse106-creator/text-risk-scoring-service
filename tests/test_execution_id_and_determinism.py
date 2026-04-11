@@ -17,7 +17,7 @@ import hashlib
 import pytest
 from unittest.mock import patch, MagicMock
 
-from app.layer4_core import submit_proposal, CoreExecutionResult
+from app.sutradhara_control_plane import invoke_mandala, MandalaInvocationResult
 from app.layer5_bucket import get_bucket_entries
 from app.enforcement_schemas import (
     EvaluateActionRequest,
@@ -28,7 +28,7 @@ from app.enforcement_schemas import (
     DGICEpistemicStateInput,
     SourceSystem,
 )
-from app.layer1_sarathi import evaluate_action, compute_trace_hash
+from app.layer1_sarathi import evaluate_action_full as evaluate_action, compute_trace_hash
 from app.layer3_dgic import compute_envelope_hash
 
 
@@ -95,7 +95,7 @@ class TestExecutionIdEnforcement:
     def test_execution_id_propagates_through_full_pipeline(self):
         """Same execution_id must appear in request, Sarathi response, and Core result."""
         exec_id = "exec-id-propagation-001"
-        result = submit_proposal(
+        result = invoke_mandala(
             execution_id=exec_id,
             actor="propagation-agent",
             proposed_action="Generate daily report",
@@ -109,7 +109,7 @@ class TestExecutionIdEnforcement:
     def test_execution_id_in_ledger_matches(self, mock_write):
         """The ledger entry must carry the same execution_id."""
         exec_id = "exec-id-ledger-001"
-        submit_proposal(
+        invoke_mandala(
             execution_id=exec_id,
             actor="ledger-agent",
             proposed_action="Test action",
@@ -164,8 +164,8 @@ class TestExecutionIdEnforcement:
             trace_hash="a" * 64,
         )
 
-        with patch("app.layer4_core.sarathi_evaluate", return_value=fake_sarathi_response):
-            result = submit_proposal(
+        with patch("app.sutradhara_control_plane.evaluate_action", return_value=fake_sarathi_response):
+            result = invoke_mandala(
                 execution_id=exec_id,
                 actor="mismatch-agent",
                 proposed_action="Test action",
@@ -285,7 +285,7 @@ class TestDeterminismValidation:
 
     @patch("app.layer5_bucket.requests.post")
     def test_full_pipeline_determinism_1000_iterations(self, mock_post):
-        """Full Core pipeline: 1000 iterations must produce identical CoreExecutionResult."""
+        """Full Core pipeline: 1000 iterations must produce identical MandalaInvocationResult."""
         # Mock bucket POST to avoid 1000 HTTP calls
         mock_post.return_value = MagicMock()
         mock_post.return_value.raise_for_status = MagicMock()
@@ -293,7 +293,7 @@ class TestDeterminismValidation:
         dgic = _make_dgic_state()
 
         # Get reference result
-        ref = submit_proposal(
+        ref = invoke_mandala(
             execution_id="det-full-001",
             actor="determinism-agent",
             proposed_action="Generate daily report",
@@ -307,7 +307,7 @@ class TestDeterminismValidation:
         ref_hash = ref.trace_hash
 
         for i in range(1000):
-            result = submit_proposal(
+            result = invoke_mandala(
                 execution_id="det-full-001",
                 actor="determinism-agent",
                 proposed_action="Generate daily report",

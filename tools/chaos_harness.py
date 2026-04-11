@@ -35,7 +35,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 from app.layer3_dgic import (
     EpistemicState,
     DGICInput,

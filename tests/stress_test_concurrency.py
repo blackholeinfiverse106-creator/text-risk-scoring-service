@@ -1,7 +1,7 @@
 import concurrent.futures
 import pytest
 import uuid
-from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 
 def task(i):
     # Unique correlation ID per request to verify log separation

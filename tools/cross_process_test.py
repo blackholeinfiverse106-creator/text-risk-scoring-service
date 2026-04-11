@@ -73,7 +73,7 @@ def worker_task(args: Tuple) -> Dict:
     # Must re-import inside worker (each process has its own Python interpreter)
     import sys, os
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-    from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 
     hashes = []
     for _ in range(runs):

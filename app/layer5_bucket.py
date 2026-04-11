@@ -198,7 +198,7 @@ def get_bucket_entry(artifact_id: str) -> Optional[Dict[str, Any]]:
 # ============================================================
 
 from app.enforcement_schemas import EvaluateActionRequest
-from app.layer1_sarathi import evaluate_action
+from app.layer1_sarathi import evaluate_action_full as evaluate_action
 
 
 @dataclass(frozen=True)

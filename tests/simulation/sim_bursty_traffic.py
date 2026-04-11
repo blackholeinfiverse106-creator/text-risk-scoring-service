@@ -14,7 +14,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from rate_simulation_tests.token_bucket import TokenBucket
-from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 
 
 QUIET_REQUESTS  = 5      # small number during quiet phase

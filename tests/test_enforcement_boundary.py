@@ -50,7 +50,7 @@ def test_non_authority_defaults():
     """
     Verify that the standard response model adheres to the non-authority layer.
     """
-    from app.layer1_sarathi import analyze_text
+    from app.layer0_intelligence import analyze_text
     response = analyze_text("safe input")
     # Contract layer check
     validate_output_contract(response)

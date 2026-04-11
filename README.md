@@ -243,7 +243,7 @@ Agent Request
         → Enforcement Gate (validate sovereign compliance)
       ← Core (map verdict → executed flag)
       → Bucket (record decision — Core writes, not enforcement)
-    ← CoreExecutionResult
+    ← MandalaInvocationResult
 ```
 
 ---
@@ -261,11 +261,11 @@ POST /analyze                        POST /api/v1/aggregate/unified
 POST /api/v1/sutradhara/invoke           ├─ DGIC Enforcement Bridge
      │                                    ├─ InsightBridge Telemetry
      ├─ Sūtradhāra (agent verify)        └─ Return enriched payload
-     ├─ Core (submit_proposal)
+     ├─ Core (invoke_mandala)
      │   ├─ Sarathi governance
      │   ├─ Enforcement gate
      │   ├─ Bucket recording
-     │   └─ CoreExecutionResult
+     │   └─ MandalaInvocationResult
      └─ Return result
 ```
 

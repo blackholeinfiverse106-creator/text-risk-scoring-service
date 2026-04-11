@@ -24,10 +24,10 @@ from app.enforcement_schemas import (
     SourceSystem,
     SarathiDecision,
 )
+from app.layer0_intelligence import aggregate_context_signals
 from app.layer1_sarathi import (
-    evaluate_action,
+    evaluate_action_full as evaluate_action,
     compute_trace_hash,
-    aggregate_context_signals,
     DENY_RISK_THRESHOLD,
     AMBIGUOUS_DENY_THRESHOLD,
 )
@@ -247,7 +247,7 @@ class TestContextSignalAggregation:
     def test_no_signals_returns_zero(self):
         """No context signals → 0.0 aggregate."""
         req = _make_request(context_signals=[])
-        assert aggregate_context_signals(req) == 0.0
+        assert aggregate_context_signals(req.context_signals) == 0.0
 
     def test_non_insightbridge_max_signal_used(self):
         """Non-InsightBridge aggregation uses raw max (fail-high)."""
@@ -257,7 +257,7 @@ class TestContextSignalAggregation:
             ContextSignal(signal_id="c", signal_type="env", value=0.5, source="s3"),
         ]
         req = _make_request(context_signals=signals)
-        assert aggregate_context_signals(req) == 0.8
+        assert aggregate_context_signals(req.context_signals) == 0.8
 
     def test_insightbridge_signals_are_weighted(self):
         """InsightBridge signals are mathematically weighted before max is taken."""
@@ -270,7 +270,7 @@ class TestContextSignalAggregation:
         req = _make_request(context_signals=signals)
         # Even though anomaly's raw 0.8 is higher than security_alert's 0.6,
         # the security_alert's weighted 0.6 wins over the anomaly's weighted 0.4
-        assert aggregate_context_signals(req) == 0.6
+        assert aggregate_context_signals(req.context_signals) == 0.6
         
     def test_insightbridge_fallback_weight(self):
         """Unknown InsightBridge signal types fallback to 0.1 weight."""
@@ -279,7 +279,7 @@ class TestContextSignalAggregation:
             ContextSignal(signal_id="a", signal_type="made_up", value=0.9, source="INSIGHTBRIDGE"),
         ]
         req = _make_request(context_signals=signals)
-        assert aggregate_context_signals(req) == 0.09
+        assert aggregate_context_signals(req.context_signals) == 0.09
 
 
 # ============================================================

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.schemas import InputSchema, OutputSchema, DGICIngestRequest, AggregateRequest
-from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 from app.contract_enforcement import validate_input_contract, validate_output_contract, ContractViolation
 from app.layer3_dgic import validate_dgic_input, adapt_dgic, apply_dgic_modifiers, DGICContractViolation
 from app.layer6_insightbridge import aggregate_signals
@@ -179,7 +179,7 @@ def aggregate_unified_endpoint(payload: UnifiedAggregateRequest):
 # Sūtradhāra Control Plane Endpoint (Layer 2)
 # ============================================================
 
-from app.layer4_core import CoreExecutionResult
+from app.layer4_core import MandalaInvocationResult
 
 class SutradharaInvokeRequest(_CoreBaseModel):
     """API-level request for Agent invocations."""
@@ -191,7 +191,7 @@ class SutradharaInvokeRequest(_CoreBaseModel):
     source_system: str  # String representation, dynamically validated by registry
 
 
-@app.post("/api/v1/sutradhara/invoke", response_model=CoreExecutionResult)
+@app.post("/api/v1/sutradhara/invoke", response_model=MandalaInvocationResult)
 def sutradhara_invoke(payload: SutradharaInvokeRequest):
     """
     The exclusive operational entry-point for all BHIV agents.
@@ -225,7 +225,7 @@ def sutradhara_invoke(payload: SutradharaInvokeRequest):
             exc_info=True,
             extra={"event_type": "sutradhara_error"},
         )
-        return CoreExecutionResult(
+        return MandalaInvocationResult(
             execution_id=payload.execution_id or "sys-failure",
             execution_decision="DENY",
             executed=False,

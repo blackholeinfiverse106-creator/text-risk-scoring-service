@@ -10,7 +10,7 @@ import sys
 import os
 sys.path.append(os.getcwd())
 
-from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 
 def validate_determinism():
     test_cases = [

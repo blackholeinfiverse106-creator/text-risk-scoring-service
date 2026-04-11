@@ -23,7 +23,13 @@ import logging as _logging
 _logging.getLogger("app.engine").setLevel(_logging.CRITICAL)
 _logging.getLogger().setLevel(_logging.CRITICAL)
 
-from app.layer1_sarathi import analyze_text, RISK_KEYWORDS, MAX_TEXT_LENGTH
+from app.layer0_intelligence import MAX_TEXT_LENGTH
+from app.layer0_intelligence import RISK_KEYWORDS
+from app.layer0_intelligence import analyze_text
+from app.layer0_intelligence import MAX_TEXT_LENGTH
+from app.layer0_intelligence import RISK_KEYWORDS
+from app.layer0_intelligence import MAX_TEXT_LENGTH
+# from app.layer1_sarathi import analyze_text  # moved to layer0_intelligence 
 
 # ──────────────────────────────────────────────
 # TIMING THRESHOLD (ms)

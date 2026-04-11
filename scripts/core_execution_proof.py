@@ -2,7 +2,7 @@ import sys
 import os
 import logging
 from unittest.mock import patch
-from app.layer4_core import submit_proposal, CoreExecutionResult
+from app.sutradhara_control_plane import invoke_mandala, MandalaInvocationResult
 from app.enforcement_schemas import (
     SourceSystem,
     DGICEpistemicStateInput,
@@ -17,7 +17,7 @@ def print_separator(title: str):
     print(f" {title} ".center(60, '='))
     print(f"{'='*60}\n")
 
-def print_result(result: CoreExecutionResult, executed: bool):
+def print_result(result: MandalaInvocationResult, executed: bool):
     print(f"  Result : {result.enforcement_decision.value}")
     if executed:
         print(f"  Actions: [EXECUTE_ACTION] triggered")
@@ -36,7 +36,7 @@ def main():
     # Case 1: ALLOW
     print("--- CASE 1: ALLOW ---")
     with patch("app.layer4_core.execute_action") as mock_exec:
-        result = submit_proposal(
+        result = invoke_mandala(
             execution_id="auth-001",
             actor="sys-admin",
             proposed_action="Generate standard dashboard report",
@@ -49,7 +49,7 @@ def main():
     # Case 2: DENY
     print("--- CASE 2: DENY ---")
     with patch("app.layer4_core.block_execution") as mock_block:
-        result = submit_proposal(
+        result = invoke_mandala(
             execution_id="auth-002",
             actor="sys-admin",
             proposed_action="explode the headquarters",
@@ -65,7 +65,7 @@ def main():
     print("--- CASE 3: ABSTAIN ---")
     with patch("app.layer4_core.block_execution") as mock_block:
         # Pass an UNKNOWN state to trigger ABSTAIN
-        result = submit_proposal(
+        result = invoke_mandala(
             execution_id="auth-003",
             actor="sys-admin",
             proposed_action="Execute diagnostic tool",
@@ -81,7 +81,7 @@ def main():
     # Failure 1: Enforcement decision missing
     print("--- FAILURE CASE 1: Enforcement decision missing ---")
     with patch("app.layer4_core.enforce", return_value={"execution_id": "fail-1", "confidence": 0.0}):
-        result = submit_proposal(
+        result = invoke_mandala(
             execution_id="fail-001",
             actor="user",
             proposed_action="action",
@@ -105,7 +105,7 @@ def main():
             failure_reason = None
             risk_score = 0.1
         mock_sarathi.return_value = FakeResponse()
-        result = submit_proposal(
+        result = invoke_mandala(
             execution_id="fail-002",
             actor="user",
             proposed_action="action",
@@ -120,7 +120,7 @@ def main():
     # Failure 3: Invalid enforcement output
     print("--- FAILURE CASE 3: Invalid enforcement output ---")
     with patch("app.layer4_core.enforce", return_value="INVALID_STRING_OUTPUT"):
-        result = submit_proposal(
+        result = invoke_mandala(
             execution_id="fail-003",
             actor="user",
             proposed_action="action",
@@ -135,7 +135,7 @@ def main():
     # Failure 4: Sarathi missing
     print("--- FAILURE CASE 4: Sarathi missing ---")
     with patch("app.layer4_core.sarathi_evaluate", return_value=None):
-        result = submit_proposal(
+        result = invoke_mandala(
             execution_id="fail-004",
             actor="user",
             proposed_action="action",

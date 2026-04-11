@@ -1,7 +1,9 @@
 import pytest
 import time
 import uuid
-from app.layer1_sarathi import analyze_text, MAX_TEXT_LENGTH
+from app.layer0_intelligence import MAX_TEXT_LENGTH
+from app.layer0_intelligence import analyze_text
+from app.layer0_intelligence import MAX_TEXT_LENGTH
 
 def test_large_payload_performance():
     """

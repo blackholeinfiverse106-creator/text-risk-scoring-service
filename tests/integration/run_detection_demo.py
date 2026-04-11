@@ -21,7 +21,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from broken_engine import analyze_text as broken_analyze_text
 
 # Also import real engine for contrast
-from app.layer1_sarathi import analyze_text as real_analyze_text
+from app.layer0_intelligence import analyze_text
+# from app.layer1_sarathi import analyze_text as real_analyze  # moved to layer0_intelligence
 
 ITERATIONS = 200   # Fewer needed — noise is injected on every call
 SEMANTIC_FIELDS = ["risk_score", "confidence_score", "risk_category",

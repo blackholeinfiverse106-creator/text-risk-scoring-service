@@ -1,6 +1,8 @@
 import pytest
 import time
-from app.layer1_sarathi import analyze_text, MAX_TEXT_LENGTH
+from app.layer0_intelligence import MAX_TEXT_LENGTH
+from app.layer0_intelligence import analyze_text
+from app.layer0_intelligence import MAX_TEXT_LENGTH
 
 def test_obfuscation_resistance_basic():
     """

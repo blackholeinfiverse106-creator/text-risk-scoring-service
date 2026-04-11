@@ -6,7 +6,7 @@ import pytest
 import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 
 class TestSystemLimits:
     """Test system at breaking points"""

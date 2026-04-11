@@ -21,7 +21,7 @@ def test_tier_3_logic_failure_handling():
     """
     Verify Tier 3 handling via engine exception.
     """
-    from app.layer1_sarathi import analyze_text
+    from app.layer0_intelligence import analyze_text
     # Passing None to analyze_text (if not type-checked earlier) would cause Tier 3 in the try/except block
     response = analyze_text(None)
     assert response["errors"]["error_code"] == "INVALID_TYPE"

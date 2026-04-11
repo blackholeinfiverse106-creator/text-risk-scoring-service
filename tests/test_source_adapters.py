@@ -12,7 +12,7 @@ from app.enforcement_schemas import ContextSignal, SourceSystem, EvaluateActionR
 from app.marine_rules import calculate_marine_signal
 from app.aiaic_rules import calculate_aiaic_signal
 from app.c4s_rules import calculate_c4s_signal
-from app.layer1_sarathi import aggregate_context_signals
+from app.layer0_intelligence import aggregate_context_signals
 
 
 # ============================================================
@@ -191,7 +191,7 @@ class TestGateAggregation:
         )
 
         # The maximum value out of 0.95, 0.4, 0.1 should be 0.95
-        max_signal = aggregate_context_signals(request)
+        max_signal = aggregate_context_signals(request.context_signals)
         assert max_signal == 0.95
 
     def test_aggregate_unknown_source_fallback(self):
@@ -220,5 +220,5 @@ class TestGateAggregation:
         )
 
         # Unknown source should just return the raw `value` (0.6)
-        max_signal = aggregate_context_signals(request)
+        max_signal = aggregate_context_signals(request.context_signals)
         assert max_signal == 0.6

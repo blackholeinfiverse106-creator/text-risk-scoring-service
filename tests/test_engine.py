@@ -1,4 +1,4 @@
-from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 
 
 # =========================
@@ -88,7 +88,8 @@ def test_low_confidence_ambiguous():
     assert result["confidence_score"] < 0.7
 
 
-# from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
+# from app.layer1_sarathi import 
 
 # def test_determinism():
 #     text = "This is a scam message"

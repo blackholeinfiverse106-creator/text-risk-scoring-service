@@ -3,7 +3,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest
-from app.layer1_sarathi import analyze_text, error_response
+from app.layer0_intelligence import analyze_text
+from app.layer0_intelligence import error_response  # error_response was removed, check if it exists
 
 def test_safety_metadata_on_valid_input():
     """Verify safety metadata is strictly enforced on valid predictions."""

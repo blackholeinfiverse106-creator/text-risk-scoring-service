@@ -1,7 +1,7 @@
 import hashlib
 import json
 import pytest
-from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 
 TEST_INPUTS = [
     "safe text here",

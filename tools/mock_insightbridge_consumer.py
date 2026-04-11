@@ -19,7 +19,7 @@ import jsonschema
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, PROJECT_ROOT)
 
-from app.layer1_sarathi import analyze_text
+from app.layer0_intelligence import analyze_text
 from app.layer3_dgic import EpistemicState, DGICInput, build_evidence_hash, compute_envelope_hash, DGICPayload
 from app.layer6_insightbridge import aggregate_signals
 

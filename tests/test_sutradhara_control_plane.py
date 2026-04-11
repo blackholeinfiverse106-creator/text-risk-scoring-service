@@ -43,7 +43,7 @@ def test_invoke_agent_valid_ksml_payload():
     )
     
     # Should not raise any KSML validation or agent verification errors.
-    # It will hit the mock-less submit_proposal and should return CoreExecutionResult.
+    # It will hit the mock-less invoke_mandala and should return MandalaInvocationResult.
     result = invoke_agent(ksml)
     
     assert result.execution_id == "exec-1234567890ab"
