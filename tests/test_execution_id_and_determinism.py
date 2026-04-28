@@ -28,7 +28,8 @@ from app.enforcement_schemas import (
     DGICEpistemicStateInput,
     SourceSystem,
 )
-from app.layer1_sarathi import evaluate_action_full as evaluate_action, compute_trace_hash
+from app.layer5_bucket import _replay_evaluate_action as evaluate_action
+from app.layer1_sarathi import compute_trace_hash
 from app.layer3_dgic import compute_envelope_hash
 
 
@@ -151,33 +152,23 @@ class TestExecutionIdEnforcement:
         assert response.sarathi_decision == SarathiDecision.ABSTAIN
 
     def test_execution_id_mismatch_blocks(self):
-        """If Sarathi returns a different execution_id, Core must DENY."""
+        """If sarathi_execution_id differs from pipeline execution_id, RAJYA must DENY."""
+        from app.rajya_validation_engine import validate_execution_request, RajyaValidationResult
+
         exec_id = "exec-mismatch-001"
 
-        # Create a mock Sarathi response with a DIFFERENT execution_id
-        fake_sarathi_response = SarathiEvaluateResponse(
-            execution_id="WRONG-ID-999",  # MISMATCH
-            risk_score=0.1,
-            sarathi_decision=SarathiDecision.ALLOW,
-            confidence=0.9,
-            failure_reason=None,
-            trace_hash="a" * 64,
-        )
+        # RAJYA catches execution_id mismatch directly
+        result, rejection = validate_execution_request({
+            "execution_id": exec_id,
+            "sarathi_decision": "ALLOW",
+            "sarathi_execution_id": "WRONG-ID-999",  # MISMATCH
+            "enforcement_verdict": {"enforcement_decision": "ALLOW"},
+        })
 
-        with patch("app.sutradhara_control_plane.evaluate_action", return_value=fake_sarathi_response):
-            result = invoke_mandala(
-                execution_id=exec_id,
-                actor="mismatch-agent",
-                proposed_action="Test action",
-                context_signals=[],
-                dgic_epistemic_state=_make_dgic_state(),
-                source_system=SourceSystem.AI_BEING,
-            )
-
-        # Must be DENIED due to mismatch
-        assert result.enforcement_decision == EnforcementDecision.DENY
-        assert "mismatch" in result.failure_reason.lower()
-        assert result.execution_id == exec_id  # Must preserve the ORIGINAL id
+        # Must be REJECTED due to mismatch
+        assert result == RajyaValidationResult.REJECT
+        assert rejection.code == "RAJYA_EXECUTION_ID_MISMATCH"
+        assert exec_id in rejection.reason
 
     def test_trace_hash_deterministic_for_same_execution_id(self):
         """Same execution_id + same inputs → same trace_hash."""

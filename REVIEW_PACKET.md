@@ -21,8 +21,8 @@ The BHIV Enforcement Ecosystem is a **7-layer sovereign architecture** where eac
 │  (Text risk analysis + Context signal aggregation)         │
 │  File: layer0_intelligence.py                              │
 ├─────────────────────────────────────────────────────────────┤
-│  Layer 1: Sarathi Governance Engine                        │
-│  (Risk Analysis + DGIC Modifiers + Deterministic Decision) │
+│  Layer 1: Sarathi Token Gate                               │
+│  (Token Minting + Pure Cryptographic Enforcement Gate)     │
 │  File: layer1_sarathi.py                                   │
 ├─────────────────────────────────────────────────────────────┤
 │  Layer 3: DGIC (Deterministic Graph Intelligence Core)     │
@@ -92,7 +92,7 @@ The BHIV Enforcement Ecosystem is a **7-layer sovereign architecture** where eac
 ### After RAJYA (Current Architecture)
 
 ```
-  Sarathi → Enforcement → ★ RAJYA ★ → Core (Core executes ONLY on RAJYA approval)
+  Inline Decision → Enforcement → ★ RAJYA ★ → Sarathi (Mints Token) → Core (Executes ONLY on Token ALLOW)
 ```
 
 ### Sūtradhāra Control Plane → Full Pipeline
@@ -113,32 +113,38 @@ The BHIV Enforcement Ecosystem is a **7-layer sovereign architecture** where eac
   ├── Build EvaluateActionRequest
   ├── DGIC snapshot ingestion        ← layer3_dgic.py (seal verify + freeze)
   ├── compute_intelligence()         ← layer0_intelligence.py (risk + signals)
-  ├── Sarathi evaluate_action()      ← layer1_sarathi.py (ALLOW/DENY/ABSTAIN)
+  ├── _derive_decision_from_intelligence() (Inline ALLOW/DENY/ABSTAIN)
   ├── EXECUTION ID GUARD             (mismatch = hard DENY, short-circuit)
   ├── enforce()                      ← layer4_enforcement.py (pure gate)
-  │    ├── Validate Sarathi decision exists
+  │    ├── Validate derived decision exists
   │    ├── Validate execution_id match
   │    ├── Validate DGIC snapshot present
   │    └── Return Dict {execution_id, enforcement_decision, confidence}
   │
   ├── ★ RAJYA VALIDATION ★           ← rajya_validation_engine.py
   │    ├── [LOG] RAJYA VALIDATION START
-  │    ├── Rule 1: Sarathi authority missing? → REJECT
+  │    ├── Rule 1: Derived authority missing? → REJECT
   │    ├── Rule 1: Enforcement authority missing? → REJECT
   │    ├── Rule 2: execution_id mismatch? → REJECT
-  │    ├── Rule 3: Sarathi != ALLOW? → REJECT
+  │    ├── Rule 3: Derived != ALLOW? → REJECT
   │    ├── Rule 4: Enforcement != ALLOW? → REJECT
   │    ├── [LOG] RAJYA DECISION (APPROVED or REJECT)
   │    └── Return EXECUTION_APPROVED or REJECT
   │
-  ├── [LOG] CORE HANDOFF (only on APPROVED)
+  ├── Sarathi Token Minting          ← layer1_sarathi.py
+  │    ├── (ONLY generated if RAJYA = EXECUTION_APPROVED)
+  │    ├── [LOG] SARATHI TOKEN MINTED
+  │    └── enforce_token() Validation pre-Core
   │
-  ├── execute_core_mandala()         ← layer4_core.py (PURE EXECUTION)
-  │    ├── [LOG] CORE ENTRY (rajya_result logged)
-  │    ├── if EXECUTION_APPROVED → execute_action()
-  │    │    └── [LOG] CORE EXECUTED
-  │    ├── else → block_execution()
-  │    │    └── [LOG] CORE BLOCKED
+  ├── [LOG] CORE HANDOFF (only on APPROVED & VALID TOKEN)
+  │
+  ├── execute_core_mandala()         ← layer4_core.py (PURE EXECUTION SINK)
+  │    ├── [LOG] CORE ENTRY
+  │    ├── enforce_token() gate      ← layer1_sarathi.py
+  │    │    └── if ALLOW → execute_action()
+  │    │         └── [LOG] CORE EXECUTED
+  │    │    └── if BLOCK (SarathiHardBlockError) → block_execution()
+  │    │         └── [LOG] CORE BLOCKED
   │    ├── write_execution_record()   ← layer5_bucket.py
   │    ├── [LOG] CORE EXIT
   │    └── Return MandalaInvocationResult
@@ -251,6 +257,9 @@ Every terminal enforcement decision emits structured telemetry via `emit_enforce
 | **Phase 10a** | **Core stripped of ALL validation — receives only RAJYA verdict, no Sarathi/Enforcement checks** | `layer4_core.py` |
 | **Phase 10b** | **Structured proof logging — RAJYA start/decision + Core entry/executed/blocked/exit** | `rajya_validation_engine.py`, `sutradhara_control_plane.py`, `layer4_core.py` |
 | **Phase 10c** | **Failure case validation — 12 tests proving all rejections stop at RAJYA, Core never fires** | `test_rajya_failure_cases.py` |
+| **Phase 11**  | **Sarathi pure enforcement token + gate layer — Sarathi decision logic stripped, now exclusively mints/validates cryptographic tokens** | `layer1_sarathi.py`, `layer4_core.py`, `sutradhara_control_plane.py` |
+| **Phase 11a** | **Token Validation Engine — enforce_token gate rigidly blocks execution without valid execution_id, RAJYA verdict, and signature hash** | `layer1_sarathi.py` |
+| **Phase 11b** | **Core Execution Sink — Core acts strictly on enforce_token() ALLOW output, absolutely zero decision or validation logic inside Core** | `layer4_core.py` |
 
 ---
 
@@ -302,64 +311,63 @@ Every terminal enforcement decision emits structured telemetry via `emit_enforce
 
 ### Test Suite
 ```
-443 passed in 43.31s
+465 passed in 42.76s
 ```
 
 Command: `python -m pytest tests/ --tb=short`
 
-### RAJYA Execution Trace Logs (ALLOW path)
+### Execution Trace Logs (ALLOW path)
 ```
-INFO  RAJYA VALIDATION START | execution_id=exec-001 | sarathi_decision=ALLOW
 INFO  RAJYA APPROVED | execution_id=exec-001
 INFO  RAJYA DECISION | execution_id=exec-001 | result=EXECUTION_APPROVED | rejection=NONE
-INFO  CORE HANDOFF | execution_id=exec-001 | rajya=EXECUTION_APPROVED → Core will execute
-INFO  CORE ENTRY | execution_id=exec-001 | rajya_result=EXECUTION_APPROVED
-INFO  CORE EXECUTED | execution_id=exec-001 | rajya=EXECUTION_APPROVED
-INFO  CORE EXIT | execution_id=exec-001 | decision=ALLOW | rajya=EXECUTION_APPROVED
+INFO  SARATHI TOKEN MINTED | execution_id=exec-001 | signature=203d1d076ad00d60...
+INFO  SARATHI TOKEN VALID | execution_id=exec-001
+INFO  SARATHI GATE ALLOW | execution_id=exec-001 | signature=203d1d076ad00d60...
+INFO  CORE HANDOFF | execution_id=exec-001 | rajya=EXECUTION_APPROVED | token_status=VALID → Core will execute
+INFO  CORE ENTRY | execution_id=exec-001 | token_present=True
+INFO  SARATHI TOKEN VALID | execution_id=exec-001
+INFO  SARATHI GATE ALLOW | execution_id=exec-001 | signature=203d1d076ad00d60...
+INFO  CORE EXECUTED | execution_id=exec-001 | action='Generate daily report' | sarathi_gate=ALLOW
+INFO  CORE EXIT | execution_id=exec-001 | decision=ALLOW | sarathi_gate=ALLOW
 ```
 
-### RAJYA Execution Trace Logs (DENY path — Core never fires)
+### Execution Trace Logs (DENY path — Core never fires)
 ```
 INFO  RAJYA VALIDATION START | execution_id=exec-002 | sarathi_decision=DENY
 INFO  RAJYA REJECT: RAJYA_SARATHI_NOT_ALLOW | execution_id=exec-002
 INFO  RAJYA DECISION | execution_id=exec-002 | result=REJECT | rejection=RAJYA_SARATHI_NOT_ALLOW
 WARN  RAJYA rejected execution | execution_id=exec-002 | code=RAJYA_SARATHI_NOT_ALLOW
-→ Core ENTRY never logged. Core EXECUTED never logged. Execution blocked at RAJYA.
+→ Sarathi Token Mint NEVER called.
+→ Core ENTRY NEVER logged.
+→ Core EXECUTED NEVER logged.
+Execution blocked at RAJYA.
 ```
 
-### RAJYA Validation Proof
+### Sarathi Token Gate Proof
 
-| Failure Case | RAJYA Stops? | Core Executes? | Test File |
+| Failure Case | Gate Verdict | Core Executes? | Test File |
 |-------------|-------------|---------------|----------|
-| Sarathi missing | ✅ REJECT | ❌ Never | `test_rajya_failure_cases.py` |
-| Sarathi DENY | ✅ REJECT | ❌ Never | `test_rajya_failure_cases.py` |
-| Sarathi ABSTAIN | ✅ REJECT | ❌ Never | `test_rajya_failure_cases.py` |
-| Enforcement DENY | ✅ REJECT | ❌ Never | `test_rajya_failure_cases.py` |
-| Enforcement ABSTAIN | ✅ REJECT | ❌ Never | `test_rajya_failure_cases.py` |
-| Enforcement missing | ✅ REJECT | ❌ Never | `test_rajya_failure_cases.py` |
-| execution_id mismatch | ✅ REJECT | ❌ Never | `test_rajya_failure_cases.py` |
-| ALL valid (ALLOW) | ✅ APPROVED | ✅ Executes | `test_rajya_failure_cases.py` |
-
-### Determinism Proof
-Same `trace_hash` on replay confirms byte-identical determinism:
-- Original: `8b86fa098ee8e96df393042370e65cf5fe51734cdc6578d3501c3eba7bb90bbe`
-- Replayed: `8b86fa098ee8e96df393042370e65cf5fe51734cdc6578d3501c3eba7bb90bbe`
-- Match: `True`
+| Token Missing | ⛔ BLOCK (`TOKEN_MISSING`) | ❌ Never | `test_sarathi_enforcement_gate.py` |
+| Token Status Invalid | ⛔ BLOCK (`TOKEN_STATUS_INVALID`) | ❌ Never | `test_sarathi_enforcement_gate.py` |
+| `execution_id` Mismatch | ⛔ BLOCK (`EXECUTION_ID_MISMATCH`) | ❌ Never | `test_sarathi_enforcement_gate.py` |
+| RAJYA Not Approved | ⛔ BLOCK (`RAJYA_VERDICT_NOT_APPROVED`) | ❌ Never | `test_sarathi_enforcement_gate.py` |
+| Tampered Hash | ⛔ BLOCK (`SIGNATURE_HASH_TAMPERED`) | ❌ Never | `test_sarathi_enforcement_gate.py` |
+| ALL Valid | ✅ ALLOW | ✅ Executes | `test_sarathi_enforcement_gate.py` |
 
 ### Core Execution Ownership Proof (Post-RAJYA)
-Core no longer validates Sarathi, Enforcement, or any authority decision.
-Core receives `rajya_result: RajyaValidationResult` and acts on it:
-- **`EXECUTION_APPROVED`:** `execute_action()` triggered
-- **`REJECT`:** `block_execution()` triggered (only reached if RAJYA passes through to Core — currently impossible since Sūtradhāra short-circuits)
+Core no longer validates Sarathi, Enforcement, or any authority decision directly.
+Core exclusively relies on the `enforce_token()` gate output:
+- **`ALLOW`:** `execute_action()` triggered
+- **`BLOCK` (raises `SarathiHardBlockError`):** `block_execution()` triggered
 
 ### Sovereign Boundary Proof
 - `MandalaInvocationResult` contains **no** `executed` field — verified by schema inspection
-- Core contains **zero validation logic** — receives RAJYA verdict only
-- RAJYA is the **sole pre-execution gate** — no code path bypasses it
+- Core contains **zero validation logic** — only checks if the Token gate returns ALLOW
+- RAJYA is the **sole pre-execution gate** — no code path bypasses it, and token minting strictly requires it
 - Enforcement gate has `NO_EXECUTION_RIGHTS` — verified by registry assertion test
-- All terminal paths emit InsightBridge telemetry — verified by 443 passing tests
+- All terminal paths emit InsightBridge telemetry — verified by 465 passing tests
 - Non-KSML input is rejected — verified by `test_sutradhara_control_plane.py`
-- Sūtradhāra → DGIC → Intelligence → Sarathi → Enforcement → RAJYA → Core shares strict `execution_id` continuity
+- Sūtradhāra → DGIC → Intelligence → Inline Decision → Enforcement → RAJYA → Sarathi Token → Core shares strict `execution_id` continuity
 
 ---
 

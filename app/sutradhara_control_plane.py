@@ -9,10 +9,18 @@ Responsibilities:
   1. Agent verification (Registry)
   2. Canonical execution_id provisioning
   3. Orchestrating the Authority-based Mandala
+
+Pipeline Flow (Post-Sarathi Refactor):
+  Sūtradhāra → DGIC → Intelligence → Enforcement → RAJYA → Sarathi[TOKEN MINT] → Core
+
+  Sarathi no longer decides. Sarathi only mints enforcement tokens after RAJYA approval.
+  Decision derivation from intelligence output is performed inline by the orchestrator
+  to feed RAJYA's existing interface (RAJYA is NOT modified).
 """
 
 import uuid
 import logging
+from datetime import datetime, timezone
 from typing import Optional, List
 
 from app.enforcement_schemas import (
@@ -21,12 +29,19 @@ from app.enforcement_schemas import (
     DGICEpistemicStateInput,
     KSMLInput,
     EvaluateActionRequest,
-    EnforcementDecision
+    EnforcementDecision,
+    SarathiDecision,
 )
 from app.layer4_core import execute_core_mandala, MandalaInvocationResult
 from app.layer3_dgic import ingest_dgic_snapshot, adapt_dgic, DGICSnapshotError
 from app.layer0_intelligence import compute_intelligence
-from app.layer1_sarathi import evaluate_action, compute_trace_hash
+from app.layer1_sarathi import (
+    compute_trace_hash,
+    mint_enforcement_token,
+    enforce_token,
+    SarathiTokenMintError,
+    SarathiHardBlockError,
+)
 from app.layer4_enforcement import enforce, EnforcementHardFailure
 from app.layer6_insightbridge import emit_enforcement_telemetry
 from app.rajya_validation_engine import validate_execution_request, RajyaValidationResult
@@ -47,6 +62,16 @@ SUTRADHARA_AGENT_REGISTRY = {
     }
 }
 
+# ============================================================
+# Intelligence → Decision derivation thresholds
+# These were previously in Sarathi. They are now inline in the
+# orchestrator to feed RAJYA's existing interface.
+# Sarathi itself contains ZERO decision logic.
+# ============================================================
+_DENY_RISK_THRESHOLD = 0.7
+_AMBIGUOUS_DENY_THRESHOLD = 0.3
+
+
 def verify_agent_capabilities(agent_id: str, required_capability: str) -> None:
     agent = SUTRADHARA_AGENT_REGISTRY.get(agent_id)
     if not agent:
@@ -66,6 +91,36 @@ def verify_agent(source_system_str: str) -> SourceSystem:
         logger.error("Agent verification failed", extra={"event_type": "sutradhara_registration_failure", "attempted_agent": source_system_str})
         raise AgentVerificationError(f"Unregistered or invalid agent identity: {source_system_str}")
 
+
+def _derive_decision_from_intelligence(intelligence, adapter_result, snapshot) -> str:
+    """
+    Inline decision derivation from intelligence output.
+    This feeds RAJYA's existing interface (RAJYA is NOT modified).
+
+    This is NOT Sarathi deciding — this is the orchestrator mapping
+    intelligence results to a decision value for RAJYA consumption.
+    Sarathi itself contains ZERO decision logic.
+    """
+    from app.layer3_dgic import EntropyBoundary
+
+    if adapter_result.abstain:
+        return SarathiDecision.ABSTAIN.value
+
+    final_risk = intelligence.final_risk
+
+    if final_risk >= _DENY_RISK_THRESHOLD:
+        return SarathiDecision.DENY.value
+    elif snapshot.entropy_boundary == EntropyBoundary.CRITICAL:
+        return SarathiDecision.DENY.value
+    elif (
+        adapter_result.epistemic_state.value == "AMBIGUOUS"
+        and final_risk >= _AMBIGUOUS_DENY_THRESHOLD
+    ):
+        return SarathiDecision.DENY.value
+    else:
+        return SarathiDecision.ALLOW.value
+
+
 def invoke_mandala(
     execution_id: str,
     actor: str,
@@ -83,6 +138,7 @@ def invoke_mandala(
     
     trace_hash = compute_trace_hash(request)
     
+    # ── Step 1: DGIC Snapshot Ingestion ──
     try:
         snapshot = ingest_dgic_snapshot(
             epistemic_state=dgic_epistemic_state.epistemic_state,
@@ -101,54 +157,57 @@ def invoke_mandala(
         emit_enforcement_telemetry(execution_id, result.enforcement_decision.value, result.risk_score, result.confidence, result.trace_hash)
         return result
 
+    # ── Step 2: Intelligence Computation (Layer 0 — unchanged) ──
     intelligence = compute_intelligence(proposed_action, context_signals, adapter_result, execution_id)
-    sarathi_response = evaluate_action(request, intelligence, snapshot, adapter_result, trace_hash)
-    
-    if sarathi_response is None:
-        logger.error("System reject before enforcement: Sarathi missing")
-        result = MandalaInvocationResult(
-            execution_id=execution_id, enforcement_decision=EnforcementDecision.DENY,
-            risk_score=0.0, confidence=0.0, trace_hash=execution_id[-64:].ljust(64, '0'), failure_reason="System reject: Sarathi evaluation missing"
-        )
-        emit_enforcement_telemetry(execution_id, result.enforcement_decision.value, result.risk_score, result.confidence, result.trace_hash)
-        return result
 
-    if sarathi_response.execution_id != execution_id:
-        result = MandalaInvocationResult(execution_id=execution_id, enforcement_decision=EnforcementDecision.DENY, risk_score=0.0, confidence=0.0, trace_hash=sarathi_response.trace_hash, failure_reason=f"Execution ID mismatch: pipeline sent '{execution_id}' but Sarathi returned '{sarathi_response.execution_id}'. Execution rejected.")
-        emit_enforcement_telemetry(execution_id, result.enforcement_decision.value, result.risk_score, result.confidence, result.trace_hash)
-        return result
+    # ── Step 3: Decision derivation (inline — NOT Sarathi) ──
+    # This feeds RAJYA's existing interface. Sarathi does NOT decide.
+    derived_decision = _derive_decision_from_intelligence(intelligence, adapter_result, snapshot)
+    derived_confidence = intelligence.confidence
 
+    logger.info(
+        f"Orchestrator derived decision | execution_id={execution_id} | decision={derived_decision}",
+        extra={
+            "event_type": "sutradhara_decision_derived",
+            "execution_id": execution_id,
+            "derived_decision": derived_decision,
+            "risk_score": intelligence.final_risk,
+            "confidence": derived_confidence,
+        },
+    )
+
+    # ── Step 4: Enforcement Gate ──
     dgic_snapshot_dict = dgic_epistemic_state.model_dump(mode="json")
-    
+
     try:
         verdict = enforce(
             original_execution_id=execution_id,
-            sarathi_decision=sarathi_response.sarathi_decision.value,
-            sarathi_execution_id=sarathi_response.execution_id,
-            sarathi_confidence=sarathi_response.confidence,
+            sarathi_decision=derived_decision,
+            sarathi_execution_id=execution_id,
+            sarathi_confidence=derived_confidence,
             dgic_snapshot=dgic_snapshot_dict,
         )
     except EnforcementHardFailure as e:
         logger.error(f"Enforcement hard failure | execution_id={execution_id}")
-        result = MandalaInvocationResult(execution_id=execution_id, enforcement_decision=EnforcementDecision.DENY, risk_score=0.0, confidence=0.0, trace_hash=sarathi_response.trace_hash, failure_reason=f"Enforcement hard failure: {e.code} — {e.message}")
+        result = MandalaInvocationResult(execution_id=execution_id, enforcement_decision=EnforcementDecision.DENY, risk_score=0.0, confidence=0.0, trace_hash=trace_hash, failure_reason=f"Enforcement hard failure: {e.code} — {e.message}")
         emit_enforcement_telemetry(execution_id, result.enforcement_decision.value, result.risk_score, result.confidence, result.trace_hash)
         return result
 
     # ── PROOF LOG: RAJYA validation start ──
     logger.info(
-        f"RAJYA VALIDATION START | execution_id={execution_id} | sarathi_decision={sarathi_response.sarathi_decision.value}",
+        f"RAJYA VALIDATION START | execution_id={execution_id} | sarathi_decision={derived_decision}",
         extra={
             "event_type": "rajya_validation_start",
             "execution_id": execution_id,
-            "sarathi_decision": sarathi_response.sarathi_decision.value,
+            "sarathi_decision": derived_decision,
         },
     )
 
-    # ── RAJYA — Final authority validation before Core execution ──
+    # ── Step 5: RAJYA — Final authority validation (UNMODIFIED) ──
     rajya_result, rajya_rejection = validate_execution_request({
         "execution_id": execution_id,
-        "sarathi_decision": sarathi_response.sarathi_decision.value,
-        "sarathi_execution_id": sarathi_response.execution_id,
+        "sarathi_decision": derived_decision,
+        "sarathi_execution_id": execution_id,
         "enforcement_verdict": verdict,
     })
 
@@ -171,34 +230,75 @@ def invoke_mandala(
         result = MandalaInvocationResult(
             execution_id=execution_id,
             enforcement_decision=EnforcementDecision.DENY,
-            risk_score=sarathi_response.risk_score,
-            confidence=sarathi_response.confidence,
-            trace_hash=sarathi_response.trace_hash,
+            risk_score=intelligence.final_risk,
+            confidence=derived_confidence,
+            trace_hash=trace_hash,
             failure_reason=f"RAJYA REJECT: {rajya_rejection.code} — {rajya_rejection.reason}",
+        )
+        emit_enforcement_telemetry(execution_id, result.enforcement_decision.value, result.risk_score, result.confidence, result.trace_hash)
+        return result
+
+    # ── Step 6: Sarathi — Mint enforcement token (ONLY after RAJYA approval) ──
+    # Sarathi does NOT decide. It ONLY mints the token.
+    token_timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+    try:
+        enforcement_token = mint_enforcement_token(
+            execution_id=execution_id,
+            rajya_verdict=rajya_result.value,
+            timestamp=token_timestamp,
+        )
+    except SarathiTokenMintError as e:
+        logger.error(f"Sarathi token mint failed | execution_id={execution_id} | code={e.code}")
+        result = MandalaInvocationResult(
+            execution_id=execution_id,
+            enforcement_decision=EnforcementDecision.DENY,
+            risk_score=intelligence.final_risk,
+            confidence=derived_confidence,
+            trace_hash=trace_hash,
+            failure_reason=f"Sarathi token mint error: {e.code} — {e.message}",
+        )
+        emit_enforcement_telemetry(execution_id, result.enforcement_decision.value, result.risk_score, result.confidence, result.trace_hash)
+        return result
+
+    # ── Sarathi Gate: enforce_token() pre-Core validation ──
+    try:
+        enforce_token(enforcement_token, pipeline_execution_id=execution_id)
+    except SarathiHardBlockError as e:
+        logger.error(f"Sarathi gate HARD BLOCK post-mint | execution_id={execution_id} | code={e.code}")
+        result = MandalaInvocationResult(
+            execution_id=execution_id,
+            enforcement_decision=EnforcementDecision.DENY,
+            risk_score=intelligence.final_risk,
+            confidence=derived_confidence,
+            trace_hash=trace_hash,
+            failure_reason=f"Sarathi gate HARD BLOCK: {e.code} — {e.message}",
         )
         emit_enforcement_telemetry(execution_id, result.enforcement_decision.value, result.risk_score, result.confidence, result.trace_hash)
         return result
 
     # ── PROOF LOG: Core execution decision ──
     logger.info(
-        f"CORE HANDOFF | execution_id={execution_id} | rajya=EXECUTION_APPROVED → Core will execute",
+        f"CORE HANDOFF | execution_id={execution_id} | rajya=EXECUTION_APPROVED | token_status=VALID → Core will execute",
         extra={
             "event_type": "core_handoff_proof",
             "execution_id": execution_id,
             "rajya_result": rajya_result.value,
+            "token_status": enforcement_token.token_status,
+            "token_signature": enforcement_token.signature_hash,
         },
     )
 
+    # ── Step 7: Core — Execute ONLY with valid enforcement token ──
     core_result = execute_core_mandala(
         execution_id=execution_id,
         proposed_action=proposed_action,
-        rajya_result=rajya_result,
-        sarathi_risk_score=sarathi_response.risk_score,
-        sarathi_confidence=sarathi_response.confidence,
-        sarathi_trace_hash=sarathi_response.trace_hash,
-        sarathi_failure_reason=sarathi_response.failure_reason,
+        enforcement_token=enforcement_token,
+        sarathi_risk_score=intelligence.final_risk,
+        sarathi_confidence=derived_confidence,
+        sarathi_trace_hash=trace_hash,
         request_payload=request.model_dump(mode="json"),
-        dgic_snapshot_dict=dgic_snapshot_dict
+        dgic_snapshot_dict=request.dgic_epistemic_state.model_dump(mode="json"),
     )
     
     emit_enforcement_telemetry(

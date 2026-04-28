@@ -197,8 +197,114 @@ def get_bucket_entry(artifact_id: str) -> Optional[Dict[str, Any]]:
 # verify_execution — Canonical Verify API (Phase 4)
 # ============================================================
 
-from app.enforcement_schemas import EvaluateActionRequest
-from app.layer1_sarathi import evaluate_action_full as evaluate_action
+from app.enforcement_schemas import EvaluateActionRequest, SarathiEvaluateResponse, SarathiDecision
+from app.layer1_sarathi import compute_trace_hash
+
+# ============================================================
+# Replay evaluation pipeline — NOT Sarathi decision logic.
+# This exists solely for bucket replay verification.
+# Sarathi itself contains ZERO decision logic.
+# ============================================================
+
+_DENY_RISK_THRESHOLD = 0.7
+_AMBIGUOUS_DENY_THRESHOLD = 0.3
+
+
+def _replay_evaluate_action(request: EvaluateActionRequest) -> SarathiEvaluateResponse:
+    """
+    Backward-compatible replay evaluation pipeline.
+    Used ONLY for bucket replay verification — NOT for live pipeline decisions.
+    
+    This replays the Intelligence → DGIC → decision derivation pipeline
+    to verify that stored bucket entries match their replayed output.
+    
+    Sarathi's primary role is token minting — this is a replay utility.
+    """
+    from app.layer3_dgic import (
+        ingest_dgic_snapshot,
+        adapt_dgic,
+        DGICSnapshotError,
+        EntropyBoundary,
+    )
+    from app.layer0_intelligence import compute_intelligence
+    from typing import Optional
+
+    trace_hash = compute_trace_hash(request)
+
+    try:
+        snapshot = ingest_dgic_snapshot(
+            epistemic_state=request.dgic_epistemic_state.epistemic_state,
+            entropy_score=request.dgic_epistemic_state.entropy_score,
+            contradiction_flag=request.dgic_epistemic_state.contradiction_flag,
+            lineage_hash=request.dgic_epistemic_state.lineage_hash,
+            envelope_hash=request.dgic_epistemic_state.envelope_hash,
+        )
+    except DGICSnapshotError as e:
+        return SarathiEvaluateResponse(
+            execution_id=request.execution_id,
+            risk_score=0.0,
+            sarathi_decision=SarathiDecision.ABSTAIN,
+            confidence=0.0,
+            failure_reason=f"DGIC snapshot rejected: {str(e)}",
+            trace_hash=trace_hash,
+        )
+
+    adapter_result = adapt_dgic(snapshot.dgic_input)
+
+    if adapter_result.abstain:
+        return SarathiEvaluateResponse(
+            execution_id=request.execution_id,
+            risk_score=0.0,
+            sarathi_decision=SarathiDecision.ABSTAIN,
+            confidence=0.0,
+            failure_reason="Epistemic abstention: no grounded evidence available (DGIC UNKNOWN state). Caller must handle conservatively.",
+            trace_hash=trace_hash,
+        )
+
+    intelligence = compute_intelligence(
+        request.proposed_action,
+        request.context_signals,
+        adapter_result,
+        request.execution_id,
+    )
+
+    final_risk = intelligence.final_risk
+    confidence = intelligence.confidence
+    decision: SarathiDecision
+    failure_reason: Optional[str] = None
+
+    if final_risk >= _DENY_RISK_THRESHOLD:
+        decision = SarathiDecision.DENY
+        failure_reason = f"Risk score {final_risk} exceeds governance threshold {_DENY_RISK_THRESHOLD}"
+    elif snapshot.entropy_boundary == EntropyBoundary.CRITICAL:
+        decision = SarathiDecision.DENY
+        failure_reason = "CRITICAL entropy boundary exceeded. Action denied as fail-safe."
+    elif (
+        adapter_result.epistemic_state.value == "AMBIGUOUS"
+        and final_risk >= _AMBIGUOUS_DENY_THRESHOLD
+    ):
+        decision = SarathiDecision.DENY
+        failure_reason = (
+            f"Ambiguous epistemic state with risk {final_risk} >= conservative threshold {_AMBIGUOUS_DENY_THRESHOLD}. Cannot allow action under epistemic uncertainty."
+        )
+    else:
+        decision = SarathiDecision.ALLOW
+
+    from app.layer3_dgic import verify_snapshot_integrity
+    verify_snapshot_integrity(snapshot)
+
+    return SarathiEvaluateResponse(
+        execution_id=request.execution_id,
+        risk_score=final_risk,
+        sarathi_decision=decision,
+        confidence=confidence,
+        failure_reason=failure_reason,
+        trace_hash=trace_hash,
+    )
+
+
+# Alias for backward compatibility
+evaluate_action = _replay_evaluate_action
 
 
 @dataclass(frozen=True)

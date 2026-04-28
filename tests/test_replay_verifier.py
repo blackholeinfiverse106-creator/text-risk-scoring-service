@@ -14,7 +14,7 @@ from app.enforcement_schemas import (
     DGICEpistemicStateInput,
     SourceSystem,
 )
-from app.layer1_sarathi import evaluate_action_full as evaluate_action
+from app.layer5_bucket import _replay_evaluate_action as evaluate_action
 from app.layer3_dgic import compute_envelope_hash
 
 

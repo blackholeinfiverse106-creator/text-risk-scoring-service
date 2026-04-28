@@ -69,13 +69,13 @@ def _make_dgic_state(
 # ============================================================
 
 class TestMissingSarathiStopsAtRajya:
-    """When Sarathi returns None, RAJYA must reject and Core must not fire."""
+    """When derived decision is missing/None, Enforcement Gate hard-fails and Core must not fire."""
 
-    @patch("app.sutradhara_control_plane.evaluate_action", return_value=None)
+    @patch("app.sutradhara_control_plane._derive_decision_from_intelligence", return_value=None)
     @patch("app.execution_controller.execute_action")
     @patch("app.execution_controller.block_execution")
-    def test_missing_sarathi_core_never_executes(self, mock_block, mock_exec, mock_sarathi):
-        """Sarathi=None → pipeline short-circuits BEFORE RAJYA/Core."""
+    def test_missing_sarathi_core_never_executes(self, mock_block, mock_exec, mock_derive):
+        """Derived decision=None → Enforcement hard-fails → Core never executes."""
         result = invoke_mandala(
             execution_id="fail-sarathi-001",
             actor="test-agent",
@@ -85,7 +85,7 @@ class TestMissingSarathiStopsAtRajya:
             source_system=SourceSystem.AI_BEING,
         )
         assert result.enforcement_decision == EnforcementDecision.DENY
-        assert "Sarathi" in result.failure_reason
+        assert "SARATHI_DECISION_MISSING" in result.failure_reason
         # Core must never be reached
         mock_exec.assert_not_called()
         mock_block.assert_not_called()
@@ -218,28 +218,16 @@ class TestExecutionIdMismatchStopsAtRajya:
     @patch("app.execution_controller.execute_action")
     @patch("app.execution_controller.block_execution")
     def test_id_mismatch_in_pipeline_core_never_executes(self, mock_block, mock_exec):
-        """Sarathi ID mismatch → Sūtradhāra short-circuits before RAJYA/Core."""
-        # Simulate by patching Sarathi to return mismatched execution_id
-        mock_sarathi_resp = MagicMock()
-        mock_sarathi_resp.execution_id = "TAMPERED-ID"
-        mock_sarathi_resp.sarathi_decision = MagicMock()
-        mock_sarathi_resp.sarathi_decision.value = "ALLOW"
-        mock_sarathi_resp.risk_score = 0.0
-        mock_sarathi_resp.confidence = 1.0
-        mock_sarathi_resp.trace_hash = "a" * 64
-        mock_sarathi_resp.failure_reason = None
-
-        with patch("app.sutradhara_control_plane.evaluate_action", return_value=mock_sarathi_resp):
-            result = invoke_mandala(
-                execution_id="exec-ORIGINAL",
-                actor="test-agent",
-                proposed_action="Normal action",
-                context_signals=[],
-                dgic_epistemic_state=_make_dgic_state(),
-                source_system=SourceSystem.AI_BEING,
-            )
-        assert result.enforcement_decision == EnforcementDecision.DENY
-        assert "mismatch" in result.failure_reason.lower() or "Execution ID" in result.failure_reason
+        """execution_id mismatch in RAJYA payload → RAJYA REJECT → Core never executes."""
+        # RAJYA catches execution_id mismatch when sarathi_execution_id differs
+        result, rejection = validate_execution_request({
+            "execution_id": "exec-ORIGINAL",
+            "sarathi_decision": "ALLOW",
+            "sarathi_execution_id": "TAMPERED-ID",
+            "enforcement_verdict": {"enforcement_decision": "ALLOW"},
+        })
+        assert result == RajyaValidationResult.REJECT
+        assert rejection.code == "RAJYA_EXECUTION_ID_MISMATCH"
         # Core must NEVER be reached
         mock_exec.assert_not_called()
         mock_block.assert_not_called()

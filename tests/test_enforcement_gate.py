@@ -25,12 +25,9 @@ from app.enforcement_schemas import (
     SarathiDecision,
 )
 from app.layer0_intelligence import aggregate_context_signals
-from app.layer1_sarathi import (
-    evaluate_action_full as evaluate_action,
-    compute_trace_hash,
-    DENY_RISK_THRESHOLD,
-    AMBIGUOUS_DENY_THRESHOLD,
-)
+from app.layer5_bucket import _replay_evaluate_action as evaluate_action
+from app.layer1_sarathi import compute_trace_hash
+from app.sutradhara_control_plane import _DENY_RISK_THRESHOLD as DENY_RISK_THRESHOLD, _AMBIGUOUS_DENY_THRESHOLD as AMBIGUOUS_DENY_THRESHOLD
 from app.layer3_dgic import compute_envelope_hash
 
 
