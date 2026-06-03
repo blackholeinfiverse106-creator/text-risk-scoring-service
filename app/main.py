@@ -278,3 +278,63 @@ def bucket_replay_all():
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "bhiv-enforcement-gateway"}
+
+# ============================================================
+# Sarathi Enforcement and Validation Endpoints
+# ============================================================
+
+from app.layer1_sarathi import (
+    SarathiEnforcementToken,
+    enforce_token,
+    validate_enforcement_token,
+    SarathiHardBlockError
+)
+from fastapi import Query
+
+class SarathiTokenInput(_CoreBaseModel):
+    execution_id: str
+    rajya_verdict: str
+    token_status: str
+    timestamp: str
+    signature_hash: str
+
+class EnforceRequest(_CoreBaseModel):
+    token: Optional[SarathiTokenInput] = None
+    pipeline_execution_id: Optional[str] = None
+
+@app.post("/sarathi/enforce")
+def api_sarathi_enforce(request: EnforceRequest):
+    token_obj = None
+    if request.token:
+        token_obj = SarathiEnforcementToken(
+            execution_id=request.token.execution_id,
+            rajya_verdict=request.token.rajya_verdict,
+            token_status=request.token.token_status,
+            timestamp=request.token.timestamp,
+            signature_hash=request.token.signature_hash
+        )
+    try:
+        verdict = enforce_token(token_obj, pipeline_execution_id=request.pipeline_execution_id)
+        return {"status": verdict}
+    except SarathiHardBlockError as e:
+        return JSONResponse(status_code=403, content={"error": e.message, "code": e.code, "status": "BLOCK"})
+
+
+@app.get("/sarathi/validate-token")
+def api_validate_token(
+    execution_id: str = Query(...),
+    rajya_verdict: str = Query(...),
+    token_status: str = Query(...),
+    timestamp: str = Query(...),
+    signature_hash: str = Query(...),
+    pipeline_execution_id: Optional[str] = Query(None)
+):
+    token_obj = SarathiEnforcementToken(
+        execution_id=execution_id,
+        rajya_verdict=rajya_verdict,
+        token_status=token_status,
+        timestamp=timestamp,
+        signature_hash=signature_hash
+    )
+    is_valid = validate_enforcement_token(token_obj, pipeline_execution_id)
+    return {"is_valid": is_valid}
