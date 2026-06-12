@@ -196,22 +196,63 @@ _SAFETY_METADATA = {"is_decision": False, "authority": "NONE", "actionable": Fal
 def process_for_core(signals_raw: List[Dict[str, Any]]) -> CoreEnforcementPayload:
     if not isinstance(signals_raw, list) or len(signals_raw) == 0:
         raise CoreAdapterValidationError("EMPTY_SIGNALS", "At least one signal is required")
-    # Stubbed adapter logic to keep scope clean for exercise.
-    return CoreEnforcementPayload(
-        aggregate_risk_score=0.0,
-        aggregate_risk_category="LOW",
-        aggregate_confidence=1.0,
-        signal_count=1,
-        active_signal_count=1,
-        epistemic_confidence=1.0,
-        signal_lineage="none",
-        collapse_state="uncollapsed",
-        truth_boundary_reference="none",
-        telemetry_signal_id="sig-001",
-        telemetry_timestamp="2026",
-        safety_metadata=dict(_SAFETY_METADATA),
-        errors=None
-    )
+        
+    import uuid
+    execution_id = f"exec-{uuid.uuid4().hex[:12]}"
+
+    unified_signals = []
+    for idx, s in enumerate(signals_raw):
+        try:
+            dgic_dict = s.get("dgic_envelope", {})
+            payload_dict = dgic_dict.get("payload", {})
+            
+            payload = DGICPayload(
+                epistemic_state=EpistemicState(payload_dict.get("epistemic_state", "UNKNOWN")),
+                entropy_score=float(payload_dict.get("entropy_score", 1.0)),
+                contradiction_flag=bool(payload_dict.get("contradiction_flag", False))
+            )
+            
+            dgic_input = DGICInput(
+                version=dgic_dict.get("version", "schema_v1"),
+                lineage_hash=dgic_dict.get("lineage_hash", "0"*64),
+                envelope_hash=dgic_dict.get("envelope_hash", "0"*64),
+                payload=payload,
+                collapse_flag=bool(dgic_dict.get("collapse_flag", False))
+            )
+            
+            sig = UnifiedSignal(
+                signal_id=s.get("signal_id", f"sig-{idx}"),
+                signal_type=SignalType(s.get("signal_type", "TEXT_RISK_SIGNAL")),
+                base_risk_score=float(s.get("base_risk_score", 0.0)),
+                base_confidence_score=float(s.get("base_confidence_score", 0.0)),
+                dgic_envelope=dgic_input
+            )
+            unified_signals.append(sig)
+        except Exception as e:
+            raise CoreAdapterValidationError("INVALID_SIGNAL_FORMAT", f"Failed to parse signal {idx}: {str(e)}")
+            
+    try:
+        agg_result = aggregate_unified_signals(unified_signals)
+        dgic_envelope = wrap_in_dgic_envelope(agg_result)
+        telemetry = emit_telemetry_event(execution_id, dgic_envelope)
+        
+        return CoreEnforcementPayload(
+            aggregate_risk_score=dgic_envelope.aggregate_risk_score,
+            aggregate_risk_category=dgic_envelope.aggregate_risk_category,
+            aggregate_confidence=dgic_envelope.epistemic_confidence,
+            signal_count=dgic_envelope.signal_count,
+            active_signal_count=dgic_envelope.active_signal_count,
+            epistemic_confidence=dgic_envelope.epistemic_confidence,
+            signal_lineage=dgic_envelope.signal_lineage,
+            collapse_state=dgic_envelope.collapse_state,
+            truth_boundary_reference=dgic_envelope.truth_boundary_reference,
+            telemetry_signal_id=telemetry.signal_id,
+            telemetry_timestamp=telemetry.timestamp,
+            safety_metadata=dgic_envelope.safety_metadata,
+            errors=dgic_envelope.errors
+        )
+    except Exception as e:
+        raise CoreAdapterValidationError("AGGREGATION_FAILED", f"Aggregation failed: {str(e)}")
 
 def payload_to_dict(payload: CoreEnforcementPayload) -> Dict[str, Any]:
     from dataclasses import asdict

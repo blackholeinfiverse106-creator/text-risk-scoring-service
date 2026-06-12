@@ -1,0 +1,37 @@
+[
+  {
+    "description": "ALLOW PATH Payload",
+    "payload": {
+      "execution_id": "exec-ph1-allow",
+      "sarathi_decision": "ALLOW",
+      "sarathi_execution_id": "exec-ph1-allow",
+      "enforcement_verdict": {
+        "execution_id": "exec-ph1-allow",
+        "enforcement_decision": "ALLOW",
+        "confidence": 1.0
+      }
+    }
+  },
+  {
+    "description": "DENY PATH Payload",
+    "payload": {
+      "execution_id": "exec-ph1-deny",
+      "sarathi_decision": "DENY",
+      "sarathi_execution_id": "exec-ph1-deny",
+      "enforcement_verdict": {
+        "execution_id": "exec-ph1-deny",
+        "enforcement_decision": "DENY",
+        "confidence": 1.0
+      }
+    }
+  },
+  {
+    "description": "MISSING AUTHORITY Payload (Failure Path)",
+    "payload": {
+      "execution_id": "exec-ph1-fail",
+      "sarathi_decision": null,
+      "sarathi_execution_id": "exec-ph1-fail",
+      "enforcement_verdict": null
+    }
+  }
+]

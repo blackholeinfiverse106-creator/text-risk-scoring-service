@@ -133,7 +133,7 @@ def mint_enforcement_token(
 
     Rules:
       - Only generated if rajya_verdict == "EXECUTION_APPROVED"
-      - signature_hash = SHA-256(execution_id|rajya_verdict|timestamp)
+      - signature_hash = SHA-256(executi  on_id|rajya_verdict|timestamp)
       - No randomness — fully deterministic
       - token_status is always "VALID" on mint
 
@@ -362,6 +362,6 @@ def enforce_token(
             "token_status": token.token_status,
             "signature_hash": token.signature_hash,
         },
-    )
+    )  
     return _GATE_ALLOW
 
