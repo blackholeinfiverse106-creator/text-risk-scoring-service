@@ -309,3 +309,7 @@ No database. No cache. Bucket writes via external API. Fully sovereign-compliant
 - No authentication or rate limiting (infra responsibility)
 - English only
 - Scores are not probabilities — do not use for automated enforcement
+
+
+
+-0-0-0-0-0-0-0
