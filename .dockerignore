@@ -42,3 +42,4 @@ requirements-dev.txt
 # Logs and reports
 *.log
 *.txt
+!requirements.txt
