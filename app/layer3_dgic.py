@@ -131,7 +131,10 @@ class DGICAdapterResult:
 
 class DGICContractViolation(Exception):
     """Raised when the DGIC input violates the structural or cryptographic contract."""
-    pass
+    def __init__(self, message: str, code: str = "DGIC_CONTRACT_VIOLATION"):
+        self.message = message
+        self.code = code
+        super().__init__(self.message)
 
 
 # ============================================================
@@ -152,55 +155,78 @@ def compute_envelope_hash(version: str, lineage_hash: str, payload_dict: dict) -
     raw = f"{version}|{lineage_hash}|{payload_str}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
-def validate_dgic_input(dgic: DGICInput) -> None:
+def validate_dgic_input(dgic: Any) -> DGICInput:
     """
     Validates the structural and cryptographic integrity of the DGIC schema_v1 envelope.
+    Accepts either a dict or a DGICInput instance.
     Raises DGICContractViolation if invalid.
+    Returns the validated DGICInput instance.
     """
-    if not isinstance(dgic, DGICInput):
-        raise DGICContractViolation("Input must be a DGICInput instance.")
+    if isinstance(dgic, dict):
+        try:
+            payload_dict = dgic.get("payload", {})
+            payload = DGICPayload(
+                epistemic_state=EpistemicState(payload_dict.get("epistemic_state")),
+                entropy_score=payload_dict.get("entropy_score"),
+                contradiction_flag=payload_dict.get("contradiction_flag")
+            )
+            dgic_obj = DGICInput(
+                version=dgic.get("version"),
+                lineage_hash=dgic.get("lineage_hash"),
+                envelope_hash=dgic.get("envelope_hash"),
+                payload=payload,
+                collapse_flag=dgic.get("collapse_flag", False)
+            )
+        except Exception as e:
+            raise DGICContractViolation(f"Malformed DGIC input dict: {str(e)}")
+    elif isinstance(dgic, DGICInput):
+        dgic_obj = dgic
+    else:
+        raise DGICContractViolation("Input must be a DGICInput instance or a valid dict.")
 
-    if dgic.version != "schema_v1":
-        raise DGICContractViolation(f"Unsupported envelope version: {dgic.version}. Expected 'schema_v1'.")
+    if dgic_obj.version != "schema_v1":
+        raise DGICContractViolation(f"Unsupported envelope version: {dgic_obj.version}. Expected 'schema_v1'.")
         
-    if not isinstance(dgic.lineage_hash, str) or len(dgic.lineage_hash) != 64:
+    if not isinstance(dgic_obj.lineage_hash, str) or len(dgic_obj.lineage_hash) != 64:
         raise DGICContractViolation("lineage_hash must be a 64-character SHA-256 hex string.")
         
-    if not isinstance(dgic.envelope_hash, str) or len(dgic.envelope_hash) != 64:
+    if not isinstance(dgic_obj.envelope_hash, str) or len(dgic_obj.envelope_hash) != 64:
         raise DGICContractViolation("envelope_hash must be a 64-character SHA-256 hex string.")
         
-    if not isinstance(dgic.payload, DGICPayload):
+    if not isinstance(dgic_obj.payload, DGICPayload):
         raise DGICContractViolation("payload must be a valid DGICPayload object.")
         
-    if not isinstance(dgic.payload.epistemic_state, EpistemicState):
+    if not isinstance(dgic_obj.payload.epistemic_state, EpistemicState):
         raise DGICContractViolation("payload.epistemic_state must be an EpistemicState enum.")
         
-    if isinstance(dgic.payload.entropy_score, bool) or not isinstance(dgic.payload.entropy_score, (int, float)):
+    if isinstance(dgic_obj.payload.entropy_score, bool) or not isinstance(dgic_obj.payload.entropy_score, (int, float)):
         raise DGICContractViolation("payload.entropy_score must be a numeric float.")
             
     import math
-    if math.isnan(dgic.payload.entropy_score):
+    if math.isnan(dgic_obj.payload.entropy_score):
          raise DGICContractViolation("payload.entropy_score cannot be NaN (fails range check conceptually).")
          
-    if not (0.0 <= dgic.payload.entropy_score <= 1.0):
-        raise DGICContractViolation(f"payload.entropy_score {dgic.payload.entropy_score} out of bounds [0.0, 1.0].")
+    if not (0.0 <= dgic_obj.payload.entropy_score <= 1.0):
+        raise DGICContractViolation(f"payload.entropy_score {dgic_obj.payload.entropy_score} out of bounds [0.0, 1.0].")
         
-    if not isinstance(dgic.payload.contradiction_flag, bool):
+    if not isinstance(dgic_obj.payload.contradiction_flag, bool):
         raise DGICContractViolation("payload.contradiction_flag must be a boolean.")
         
     # Cryptographic Seal Verification
     payload_dict = {
-        "epistemic_state": dgic.payload.epistemic_state.value,
-        "entropy_score": dgic.payload.entropy_score,
-        "contradiction_flag": dgic.payload.contradiction_flag
+        "epistemic_state": dgic_obj.payload.epistemic_state.value,
+        "entropy_score": dgic_obj.payload.entropy_score,
+        "contradiction_flag": dgic_obj.payload.contradiction_flag
     }
-    expected_seal = compute_envelope_hash(dgic.version, dgic.lineage_hash, payload_dict)
+    expected_seal = compute_envelope_hash(dgic_obj.version, dgic_obj.lineage_hash, payload_dict)
     
-    if expected_seal != dgic.envelope_hash:
+    if expected_seal != dgic_obj.envelope_hash:
         raise DGICContractViolation("Cryptographic seal broken: envelope_hash does not match payload hash. ENVELOPE TAMPERED.")
 
-    if dgic.payload.epistemic_state == EpistemicState.AMBIGUOUS and dgic.collapse_flag:
+    if dgic_obj.payload.epistemic_state == EpistemicState.AMBIGUOUS and dgic_obj.collapse_flag:
         raise DGICContractViolation("Illegal epistemic collapse: AMBIGUOUS state cannot be forcefully collapsed to KNOWN/escalated.")
+
+    return dgic_obj
 
 
 # ============================================================

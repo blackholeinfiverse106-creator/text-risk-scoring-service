@@ -207,14 +207,18 @@ def sutradhara_invoke(payload: SutradharaInvokeRequest):
         },
     )
     try:
-        result = invoke_agent(
-            source_system=payload.source_system,
-            actor=payload.actor,
-            proposed_action=payload.proposed_action,
-            dgic_epistemic_state=payload.dgic_epistemic_state,
-            context_signals=payload.context_signals,
-            execution_id=payload.execution_id,
+        from app.enforcement_schemas import KSMLInput
+        ksml_input = KSMLInput(
+            execution_id=payload.execution_id or f"exec-{uuid.uuid4().hex[:12]}",
+            structured_signals=payload.context_signals,
+            metadata={
+                "actor": payload.actor,
+                "proposed_action": payload.proposed_action,
+                "source_system": payload.source_system,
+                "dgic_epistemic_state": payload.dgic_epistemic_state.model_dump() if hasattr(payload.dgic_epistemic_state, "model_dump") else payload.dgic_epistemic_state.dict()
+            }
         )
+        result = invoke_agent(ksml_input)
         return result
     except AgentVerificationError as e:
         logger.error(f"Sūtradhāra registration breach: {str(e)}")
@@ -227,13 +231,11 @@ def sutradhara_invoke(payload: SutradharaInvokeRequest):
         )
         return MandalaInvocationResult(
             execution_id=payload.execution_id or "sys-failure",
-            execution_decision="DENY",
-            executed=False,
+            enforcement_decision="DENY",
             risk_score=0.0,
             confidence=0.0,
             failure_reason=f"Internal Control Plane Error: {str(e)}",
-            trace_hash="0" * 64,
-            gate_decision="DENY",
+            trace_hash="0" * 64
         )
 
 # ============================================================
