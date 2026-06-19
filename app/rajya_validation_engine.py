@@ -13,6 +13,7 @@ Authority Boundary (IMMUTABLE):
   - Returns ONLY: EXECUTION_APPROVED or REJECT with reason
   - NEVER executes actions (Core's domain)
   - NEVER computes risk (Intelligence + Sarathi's domain)
+
   - NEVER writes to Bucket (Siddhesh's domain)
   - NEVER interprets epistemic state (DGIC's domain)
 

@@ -19,6 +19,7 @@ from app.enforcement_schemas import ContextSignal, DGICEpistemicStateInput
 from fastapi import HTTPException
 from pydantic import BaseModel as _CoreBaseModel
 from typing import Optional
+from app.jwt_auth import mint_bridge_jwt, get_jwks
 
 
 # Initialize JSON logging
@@ -303,6 +304,8 @@ class SarathiTokenInput(_CoreBaseModel):
 class EnforceRequest(_CoreBaseModel):
     token: Optional[SarathiTokenInput] = None
     pipeline_execution_id: Optional[str] = None
+    trace_id: Optional[str] = None
+    cet_hash: Optional[str] = None
 
 @app.post("/sarathi/enforce")
 def api_sarathi_enforce(request: EnforceRequest):
@@ -317,9 +320,22 @@ def api_sarathi_enforce(request: EnforceRequest):
         )
     try:
         verdict = enforce_token(token_obj, pipeline_execution_id=request.pipeline_execution_id)
-        return {"status": verdict}
+        
+        jwt_token = None
+        if verdict == "ALLOW" and request.token:
+            jwt_token = mint_bridge_jwt(
+                execution_id=request.token.execution_id,
+                trace_id=request.trace_id,
+                cet_hash=request.cet_hash
+            )
+            
+        return {"status": verdict, "jwt": jwt_token}
     except SarathiHardBlockError as e:
         return JSONResponse(status_code=403, content={"error": e.message, "code": e.code, "status": "BLOCK"})
+
+@app.get("/.well-known/jwks.json")
+def jwks_endpoint():
+    return get_jwks()
 
 
 @app.get("/sarathi/validate-token")
