@@ -69,8 +69,8 @@ def mint_bridge_jwt(
     expires_in_seconds = 300  # 5 minutes
     
     payload = {
-        "iss": "sarathi-gateway",
-        "aud": "bhiv-bridge",
+        "iss": "tantra-sarathi",
+        "aud": "tantra-bridge",
         "exp": now + expires_in_seconds,
         "iat": now,
         "execution_id": execution_id,
