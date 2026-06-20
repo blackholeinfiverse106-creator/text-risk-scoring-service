@@ -1,4 +1,5 @@
 import time
+import uuid
 import base64
 import logging
 from typing import Dict, Any, Optional
@@ -73,6 +74,7 @@ def mint_bridge_jwt(
         "aud": "tantra-bridge",
         "exp": now + expires_in_seconds,
         "iat": now,
+        "jti": str(uuid.uuid4()),
         "execution_id": execution_id,
         "trace_id": trace_id if trace_id else "unknown",
         "cet_hash": cet_hash if cet_hash else "unknown",
