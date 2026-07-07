@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from app.schemas import InputSchema, OutputSchema, DGICIngestRequest, AggregateRequest
+from app.schemas import InputSchema, OutputSchema, DGICIngestRequest, AggregateRequest, RajyaValidationRequest
+from app.rajya_validation_engine import validate_execution_request, RajyaValidationResult
 from app.layer0_intelligence import analyze_text
 from app.contract_enforcement import validate_input_contract, validate_output_contract, ContractViolation
 from app.layer3_dgic import validate_dgic_input, adapt_dgic, apply_dgic_modifiers, DGICContractViolation
@@ -174,6 +175,29 @@ def aggregate_unified_endpoint(payload: UnifiedAggregateRequest):
     except Exception as e:
         logger.error("Unified aggregation error", exc_info=True)
         return {"error": str(e), "error_code": "UNIFIED_AGGREGATION_FAILED"}
+
+
+# ============================================================
+# Rajya Validation Engine Endpoint
+# ============================================================
+
+@app.post("/api/v1/rajya/validate")
+def rajya_validate_endpoint(payload: RajyaValidationRequest):
+    execution_id = payload.execution_id
+    logger.info("Rajya validation requested", extra={"execution_id": execution_id, "event_type": "rajya_validation_request"})
+    
+    request_data = payload.model_dump() if hasattr(payload, "model_dump") else payload.dict()
+    
+    result, rejection = validate_execution_request(request_data)
+    
+    if result == RajyaValidationResult.EXECUTION_APPROVED:
+        return {"status": "EXECUTION_APPROVED"}
+    else:
+        return {
+            "status": "REJECT",
+            "rejection_code": rejection.code if rejection else "UNKNOWN",
+            "rejection_reason": rejection.reason if rejection else "Unknown reason"
+        }
 
 
 # ============================================================

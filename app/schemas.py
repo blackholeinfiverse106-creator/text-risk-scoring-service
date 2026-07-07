@@ -28,3 +28,9 @@ class DGICIngestRequest(BaseModel):
 
 class AggregateRequest(BaseModel):
     signals: List[DGICIngestRequest]
+
+class RajyaValidationRequest(BaseModel):
+    execution_id: str
+    sarathi_decision: Optional[str] = None
+    sarathi_execution_id: Optional[str] = None
+    enforcement_verdict: Optional[Dict[str, Any]] = None
