@@ -1,90 +1,109 @@
-# REVIEW PACKET — FULL SOVEREIGN CORE CONVERGENCE
-
-**Phase:** Phase 6 Final Convergence  
-**Objective:** Final integration and readiness proof for the complete Sovereign Core convergence across Sūtradhāra, DGIC, Intelligence, Sarathi, Enforcement, RAJYA, and Core Execution.
-
----
+# Sovereign Core: Phase 6 REVIEW_PACKET
 
 ## 1. Entry Point
-**File:** `app/main.py`
-**Interface:** `KSMLInput` over FastAPI or direct Python function invocation `invoke_agent()`
+- **API Gateway**: `app/main.py` -> `POST /api/v1/sutradhara/invoke`
+- **Orchestrator**: `app/sutradhara_control_plane.py` -> `invoke_agent()`
 
-All execution requests must enter via the strictly typed `KSMLInput` schema, containing:
-- `execution_id`
-- `structured_signals`
-- `metadata` (must strictly contain `actor`, `proposed_action`, `source_system`, and `dgic_epistemic_state`).
+## 2. Runtime Flow
+1. **API Ingress**: Validates `EvaluateActionRequest` KSML payload.
+2. **DGIC**: Ingests snapshot, computes Epistemic envelope & boundaries.
+3. **Intelligence**: Calculates baseline contextual risk & NLP analysis.
+4. **RAJYA**: Checks risk against governance policy. Yields binary `EXECUTION_APPROVED`/`REJECT`.
+5. **Sarathi**: Mints Cryptographic Enforcement Token (if RAJYA approves).
+6. **Core Gate**: Validates token signature.
+7. **Core Actuator**: Performs physical execution.
+8. **Bucket (Async/Ledger)**: Stores Immutable Truth Event payload.
+9. **InsightBridge (Async)**: Emits observability telemetry.
 
-## 2. Core Flow
-The structural architecture defines 7 sovereign boundaries.
-```text
-KSML Input
-   │
-   ▼
-Sūtradhāra Control Plane (Agent Registration & Execution Provsioning)
-   │
-   ├──> DGIC (Snapshot Ingestion & Envelope Hash Verification)
-   ├──> Intelligence Engine (Risk & Context Signals)
-   ├──> Policy Derivation Engine (PDE) (Generates inline base decision)
-   ├──> Enforcement Gate (Validates Trace & Epistemic Boundaries)
-   │
-   ▼
-★ RAJYA Validation Engine ★ (Sole pre-execution gate, Veto Power)
-   │
-   ▼
-Sarathi Enforcement Token Minting (Cryptographic Seal of Approval)
-   │
-   ▼
-Core Execution Sink (Takes Token, Verifies Token, Acts on Verdict)
-   │
-   ▼
-Bucket (External Ledger) & InsightBridge (Telemetry Emission)
+## 3. Core Execution Files
+- `app/layer4_core.py`: Implementation of `SovereignCoreExecutionEngine` and `enforce_token` gating.
+- `app/execution_controller.py`: The physical infrastructure actuator handling the actual execution.
+
+## 4. Runtime Architecture
+A linear, vertically integrated, multi-layered stack:
+- **Layer 0**: ML Intelligence
+- **Layer 1**: Sarathi Cryptographic Tokenization
+- **Layer 2**: Sūtradhāra Control Plane
+- **Layer 3**: DGIC Epistemic Guardrails
+- **Layer 4**: Sovereign Core Actuation
+- **Layer 5**: Persistent Bucket Integration
+- **Layer 6**: InsightBridge Telemetry
+- **Parallel Module**: RAJYA Policy Verification Engine
+
+## 5. Integration Map
+- Incoming API → REST
+- Bucket Ledger → HTTP POST (Fail-Open configuration)
+- External Models → Simulated API clients in Layer 0
+- Telemetry → Simulated Kafka/Syslog Sink via InsightBridge
+
+## 6. BCAB/BCAES Classification
+*Detailed in `PHASE4_CANONICAL_REGISTRATION.md`.*
+- All 8 primary layers strictly bounded to isolated Domains (Architecture, Intelligence, Security, Operations).
+- Zero duplicate capabilities detected.
+
+## 7. Live Payloads
+**Initial Payload:**
+```json
+{
+  "execution_id": "demo-exec-0cc2a0b0",
+  "actor": "marine-intelligence-bot",
+  "proposed_action": "Transfer highly classified structural data to Sector 4",
+  "source_system": "MARINE_INTELLIGENCE"
+}
 ```
 
-## 3. Live Runtime Flow
-During Phase 3 testing, an absolute live runtime test was conducted using `scripts/prove_full_convergence.py`.
-The live flow demonstrated no stub paths and no simulated authorities. 
-A genuine `KSMLInput` populated with `DGICEpistemicStateInput` (Epistemic State: `KNOWN`, Entropy: `0.1`) was passed directly into Sūtradhāra.
-The pipeline effectively orchestrated real execution tracing hash signatures to RAJYA, received an `EXECUTION_APPROVED` verdict, passed to Sarathi, minted an `enforcement_token`, passed into `layer4_core`, and was officially stamped as `ALLOW`. 
+## 8. Execution Logs (Extract)
+```
+[INFO] Sūtradhāra invocation requested
+[INFO] DGIC snapshot ingested
+[INFO] Enforecement verdict: ALLOW
+[INFO] RAJYA APPROVED | execution_id=demo-exec-0cc2a0b0
+[INFO] SARATHI TOKEN MINTED | signature=ce2dc26edccb1f6c...
+[INFO] SARATHI GATE ALLOW
+[INFO] CORE HANDOFF | rajya=EXECUTION_APPROVED | token_status=VALID → Core will execute
+[INFO] Dispatching artifact to external bucket
+```
 
-## 4. Integration Evidence
-The integration relies on zero local state persistence.
-Evidence artifacts generated throughout the integration phases:
-- `DGIC_RAJYA_RUNTIME_PROOF.md`: Traces of all paths (ALLOW, DENY, ESCALATE, ABSTAIN).
-- `SOVEREIGN_CORE_CONVERGENCE_PROOF.md`: A live execution record showing trace integrity across all 7 boundaries without failure.
-- `RAJYA_AUTHORITY_BOUNDARY_VALIDATION.md`: A structured proof that RAJYA does not usurp orchestration or observability boundaries.
+## 9. Trace Evidence
+**Canonical Trace Hash**: `aa33a1c5ee2e0ca0d280d24eda3ad3470e76e270181906f227268583c09a24a5`
 
-## 5. Failure Cases
-(See also `FAILURE_EVIDENCE.md` for extended details)
-- **DGIC Offline/Hash Mismatch:** Pipeline gracefully rejects the snapshot and enforces `ABSTAIN` or `DENY`, avoiding execution.
-- **RAJYA Down:** System API throws 500 error; execution inherently halts (fail-closed).
-- **Trace Mismatch:** Pydantic and Enforcement validation forcefully trap execution if `sarathi_execution_id` differs from the original.
-- **Contract Violations:** Fast-API rejects poorly formed payloads before python executes any orchestration logic.
+## 10. Replay Evidence
+Determinism holds true: Offline pipeline processing correctly regenerates the exact trace hash (`aa33a1c5ee2e0ca0d280d24eda3ad3470e76e270181906f227268583c09a24a5`) without triggering external infrastructure integrations.
 
-## 6. Proof
-- Clean Deterministic Hashes (`trace_hash`) persist end to end.
-- Executed proofs verified via python scripts `prove_runtime_convergence.py` and `prove_full_convergence.py`.
-- Hardening checks validated via `prove_hardening.py`.
-- No new architecture patterns were invented; pure interfaces were upheld.
+## 11. Bucket Evidence
+The truth artifact securely dispatched to standard canonical external bucket (mocked via `http://localhost:8001/bucket/artifact`). Network failures default to "Fail-Open" ensuring pipeline continuation.
 
-## 7. Runtime Readiness
-The architecture is **FULLY READY** for production evaluation.
-- All dependencies strictly resolved and validated.
-- Python mock boundaries were proven to align with physical constraints.
-- Convergence between the Sūtradhāra orchestration and Akanksha/Pritesh's domains (DGIC + RAJYA) operates completely synchronously.
+## 12. InsightFlow Evidence
+`InsightBridge enforcement decision telemetry emitted` logged perfectly to simulated event stream, maintaining total separation from control plane.
 
-## 8. Known Risks
-- **Observability Extensibility:** `layer5_bucket.py` natively relies on external APIs with an explicit 3-second timeout and fail-open methodology. If external observability fails, the system logs but permits execution to continue.
-- **Synchronous Locking:** Pipeline currently executes blocking IO functions sequentially.
+## 13. Failure Matrix
+- **Network Outage (Bucket)** -> Fails OPEN. System proceeds.
+- **RAJYA Policy Violation** -> RAJYA Returns `REJECT`. Token NOT minted. Execution `DENIED`.
+- **Invalid Token Signature** -> Core Gate REJECT. Token NOT valid. Execution `DENIED`.
+- **DGIC Epistemic Invalidation** -> Control Plane ABSTAIN. Pipeline halts. Execution `DENIED`.
 
-## 9. Convergence Status
-**STATUS: CONVERGED**
-- Signal ✅
-- DGIC ✅
-- PDE ✅
-- RAJYA ✅
-- Sarathi ✅
-- Enforcement ✅
-- Core ✅
-- Truth / Observability ✅
+## 14. Production Validation Report
+*Detailed in `PHASE3_PRODUCTION_VALIDATION_PROOF.md`.* All tests `PASS`. Validated End-to-End Execution, Replay Determinism, Failure Injection, Dependency Resiliency, and Authority Boundation.
 
-The Sovereignty Core executes in absolute harmony.
+## 15. Dependency Map
+- **Python**: 3.11+
+- **Framework**: FastAPI / Pydantic (Control Plane)
+- **Security**: hashlib, rsa (stubbed Cryptography)
+- **External Network**: requests (Bucket API)
+
+## 16. Authority Matrix
+- **Policy**: RAJYA
+- **Tokenization**: Sarathi
+- **Execution**: Core Layer 4
+- **Orchestration**: Sūtradhāra Layer 2
+- **Risk Analysis**: Intelligence Layer 0
+- *Proof in `PHASE5_CONSTITUTIONAL_VALIDATION_REPORT.md`*
+
+## 17. Registry Map
+Canonical BCAB registration completed and cleared of duplicate capability ownership.
+
+## 18. Successor Guide
+- Setup standard venv: `python -m venv venv`
+- Install dependencies: `pip install -r requirements.txt`
+- Check tests via script: `python validate_production.py`
+- Run local simulation: `python demo_pipeline.py` (ensure `mock_bucket_service.py` is running simultaneously).
