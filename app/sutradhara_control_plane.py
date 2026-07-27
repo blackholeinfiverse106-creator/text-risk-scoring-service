@@ -33,7 +33,7 @@ from app.enforcement_schemas import (
     SarathiDecision,
 )
 from app.layer4_core import execute_core_mandala, MandalaInvocationResult
-from app.layer3_dgic import ingest_dgic_snapshot, adapt_dgic, DGICSnapshotError
+from app.layer3_dgic import ingest_dgic_snapshot, adapt_dgic, DGICSnapshotError, evaluate_external_dgic
 from app.layer0_intelligence import compute_intelligence
 from app.layer1_sarathi import (
     compute_trace_hash,
@@ -140,12 +140,31 @@ def invoke_mandala(
     
     # ── Step 1: DGIC Snapshot Ingestion ──
     try:
+        external_eval = evaluate_external_dgic(
+            execution_id=execution_id,
+            signals=context_signals,
+            metadata={"actor": actor, "proposed_action": proposed_action, "source_system": source_system.value}
+        )
+        if external_eval:
+            ep_state = external_eval["epistemic_state"]
+            ent_score = external_eval["entropy_score"]
+            contra_flag = external_eval["contradiction_flag"]
+            lin_hash = external_eval["lineage_hash"]
+            env_hash = external_eval["envelope_hash"]
+            logger.info(f"Adopted external deployed DGIC evaluation | state={ep_state} | entropy={ent_score}")
+        else:
+            ep_state = dgic_epistemic_state.epistemic_state
+            ent_score = dgic_epistemic_state.entropy_score
+            contra_flag = dgic_epistemic_state.contradiction_flag
+            lin_hash = dgic_epistemic_state.lineage_hash
+            env_hash = dgic_epistemic_state.envelope_hash
+
         snapshot = ingest_dgic_snapshot(
-            epistemic_state=dgic_epistemic_state.epistemic_state,
-            entropy_score=dgic_epistemic_state.entropy_score,
-            contradiction_flag=dgic_epistemic_state.contradiction_flag,
-            lineage_hash=dgic_epistemic_state.lineage_hash,
-            envelope_hash=dgic_epistemic_state.envelope_hash,
+            epistemic_state=ep_state,
+            entropy_score=ent_score,
+            contradiction_flag=contra_flag,
+            lineage_hash=lin_hash,
+            envelope_hash=env_hash,
         )
         adapter_result = adapt_dgic(snapshot.dgic_input)
     except DGICSnapshotError as e:

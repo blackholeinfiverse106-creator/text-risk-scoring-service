@@ -26,11 +26,19 @@ Authority Boundary (IMMUTABLE):
 import hashlib
 import json
 import logging
+import os
+import requests
+import time
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+# External DGIC Service Configuration
+DGIC_SERVICE_URL = os.environ.get("DGIC_SERVICE_URL", "")
+DGIC_SESSION_ID = os.environ.get("DGIC_SESSION_ID", "test-session")
+DGIC_TOKEN = os.environ.get("DGIC_TOKEN", "test-token")
 
 # ============================================================
 # Constants
@@ -877,3 +885,114 @@ def wrap_in_dgic_envelope(agg: AggregatedUnifiedSignal) -> DGICEnforcementEnvelo
     )
 
     return envelope
+
+
+# ============================================================
+# External Deployed DGIC Network Adapter
+# ============================================================
+
+def evaluate_external_dgic(
+    execution_id: str,
+    signals: Optional[list] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    timeout: float = 60.0,
+) -> Optional[Dict[str, Any]]:
+    """
+    Connects to an external deployed DGIC evaluation endpoint over HTTP/HTTPS
+    (configured via DGIC_SERVICE_URL environment variable).
+    
+    Adapts the external epistemic evaluation contract (e.g., mapping 'INSUFFICIENT'
+    to canonical 'AMBIGUOUS' and returning adapted entropy & hash seals).
+    """
+    url = os.environ.get("DGIC_SERVICE_URL", DGIC_SERVICE_URL).strip()
+    if not url:
+        return None
+
+    target_url = f"{url.rstrip('/')}/dgic/evaluate" if not url.endswith("/evaluate") else url
+    headers = {
+        "X-Sutradhara-Session-Id": os.environ.get("DGIC_SESSION_ID", DGIC_SESSION_ID),
+        "X-Sutradhara-Token": os.environ.get("DGIC_TOKEN", DGIC_TOKEN),
+        "Content-Type": "application/json"
+    }
+
+    formatted_signals = []
+    if signals:
+        for s in signals:
+            if hasattr(s, "model_dump"):
+                s_dict = s.model_dump(mode="json")
+            elif hasattr(s, "dict"):
+                s_dict = s.dict()
+            elif isinstance(s, dict):
+                s_dict = s
+            else:
+                continue
+            formatted_signals.append({
+                "id": str(s_dict.get("signal_id", "s0")),
+                "type": "THREAT" if "threat" in str(s_dict.get("signal_type", "")).lower() else str(s_dict.get("signal_type", "GENERIC")),
+                "priority": float(s_dict.get("value", 0.5)),
+                "timestamp": int(time.time() * 1000),
+                "source": str(s_dict.get("source", "sensor_unknown")),
+                "metadata": {}
+            })
+
+    payload = {
+        "execution_id": execution_id,
+        "ksml_input": {
+            "execution_id": execution_id,
+            "timestamp": int(time.time() * 1000),
+            "signals": formatted_signals,
+            "metadata": metadata or {}
+        },
+        "signals": []
+    }
+
+    try:
+        logger.info(
+            f"Querying external deployed DGIC service | target={target_url} | execution_id={execution_id}",
+            extra={"event_type": "external_dgic_query", "target_url": target_url, "execution_id": execution_id}
+        )
+        response = requests.post(target_url, headers=headers, json=payload, timeout=timeout)
+        if response.status_code == 200:
+            data = response.json()
+            logger.info(
+                f"External DGIC evaluation received | decision={data.get('decision')} | epistemic_state={data.get('epistemic_state')} | confidence={data.get('confidence')}",
+                extra={"event_type": "external_dgic_response", "decision": data.get("decision"), "epistemic_state": data.get("epistemic_state")}
+            )
+            raw_state = data.get("epistemic_state", "UNKNOWN")
+            canonical_state = "AMBIGUOUS" if raw_state == "INSUFFICIENT" else raw_state
+            if canonical_state not in {"KNOWN", "INFERRED", "AMBIGUOUS", "UNKNOWN"}:
+                canonical_state = "UNKNOWN"
+
+            confidence = float(data.get("confidence", 0.5))
+            entropy_score = max(0.0, min(1.0, 1.0 - confidence))
+            execution_hash = data.get("execution_hash", "0" * 64)
+            if len(str(execution_hash)) != 64:
+                execution_hash = hashlib.sha256(str(execution_hash).encode("utf-8")).hexdigest()
+
+            payload_dict = {
+                "epistemic_state": canonical_state,
+                "entropy_score": entropy_score,
+                "contradiction_flag": (data.get("decision") == "ESCALATE")
+            }
+            envelope_hash = compute_envelope_hash("schema_v1", execution_hash, payload_dict)
+
+            return {
+                "epistemic_state": canonical_state,
+                "entropy_score": entropy_score,
+                "contradiction_flag": payload_dict["contradiction_flag"],
+                "lineage_hash": execution_hash,
+                "envelope_hash": envelope_hash,
+                "raw_response": data
+            }
+        else:
+            logger.warning(
+                f"External DGIC evaluation failed with HTTP {response.status_code}: {response.text}",
+                extra={"event_type": "external_dgic_http_error", "status_code": response.status_code}
+            )
+    except Exception as e:
+        logger.warning(
+            f"External DGIC network request failed: {str(e)}",
+            extra={"event_type": "external_dgic_network_error"}
+        )
+
+    return None
