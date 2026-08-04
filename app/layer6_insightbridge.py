@@ -1104,6 +1104,41 @@ def emit_enforcement_telemetry(
             "telemetry": asdict(telemetry),
         },
     )
+
+    # LIVE EXTERNAL INTEGRATION: Broadcast to InsightBridge Registry
+    import requests
+    import os
+    import uuid
+
+    insightbridge_url = os.environ.get("INSIGHTBRIDGE_URL", "https://bhiv-6.onrender.com")
+    endpoint = f"{insightbridge_url}/api/v1/flow/events"
+    
+    # Generate a deterministic W3C traceparent for the execution_id (UUID -> hex string)
+    # W3C Trace Context Format: 00-{trace-id (32 chars)}-{span-id (16 chars)}-01
+    trace_id = execution_id.replace('-', '')
+    if len(trace_id) < 32:
+        trace_id = trace_id.ljust(32, '0')
+    span_id = uuid.uuid4().hex[:16]
+    traceparent = f"00-{trace_id}-{span_id}-01"
+
+    headers = {
+        "X-API-Key": "vijay_insightflow_10c5cbe7831071d120a52db97695fdb6",
+        "Content-Type": "application/json",
+        "traceparent": traceparent
+    }
+    
+    payload = asdict(telemetry)
+    payload["registry_id"] = "BHIV-DS-GOVERNANCE-CONTRADICTION-AUDITS-001"
+    
+    try:
+        response = requests.post(endpoint, json=payload, headers=headers, timeout=5)
+        if response.status_code == 200:
+            logger.info(f"InsightBridge POST Success | execution_id={execution_id} | response={response.text}")
+        else:
+            logger.warning(f"InsightBridge POST Failed | status={response.status_code} | response={response.text}")
+    except Exception as e:
+        logger.error(f"InsightBridge Connection Error: {str(e)}")
+
     return telemetry
 
 
