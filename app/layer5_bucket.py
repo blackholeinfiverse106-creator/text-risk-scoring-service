@@ -28,7 +28,26 @@ from typing import Optional, Dict, Any, List
 logger = logging.getLogger(__name__)
 
 # External service configuration
-BUCKET_SERVICE_URL = os.environ.get("BUCKET_SERVICE_URL", "http://localhost:8000")
+BUCKET_SERVICE_URL = os.environ.get("BUCKET_SERVICE_URL", "https://bhiv-bucket-i1l6.onrender.com")
+
+# Chained parent hash for append-only log storage (starts as None / null)
+_CURRENT_PARENT_HASH: Optional[str] = None
+
+
+def _sync_latest_parent_hash() -> Optional[str]:
+    """Fetch the latest chained hash from the external Bucket server if starting up or resyncing."""
+    global _CURRENT_PARENT_HASH
+    try:
+        url = f"{BUCKET_SERVICE_URL.rstrip('/')}/bucket/latest-hash"
+        res = requests.get(url, timeout=5.0)
+        if res.status_code == 200:
+            last_hash = res.json().get("last_hash")
+            if last_hash:
+                _CURRENT_PARENT_HASH = last_hash
+                logger.info(f"Synced latest parent_hash from Bucket server: {_CURRENT_PARENT_HASH}")
+    except Exception as e:
+        logger.warning(f"Could not sync latest hash from Bucket server: {e}")
+    return _CURRENT_PARENT_HASH
 
 
 # ============================================================
@@ -70,7 +89,12 @@ def write_execution_record(
     """
     timestamp_utc = datetime.now(timezone.utc).isoformat()
 
+    global _CURRENT_PARENT_HASH
+    if _CURRENT_PARENT_HASH is None:
+        _sync_latest_parent_hash()
+
     execution_payload = {
+        "execution_id": execution_id,
         "request_payload": request_payload or {},
         "dgic_snapshot": dgic_snapshot or {},
         "decision": decision,
@@ -78,46 +102,80 @@ def write_execution_record(
         "confidence": confidence,
         "failure_reason": failure_reason,
         "trace_hash": trace_hash,
+        "stage": "enforcement_gate",
+        "pipeline": "SOVEREIGN_CORE",
     }
 
     artifact = {
         "artifact_id": execution_id,
-        "source_module_id": "bhiv_enforcement_gate",
-        "schema_version": "1.0.0",
+        "trace_id": trace_hash if trace_hash else execution_id,
         "timestamp_utc": timestamp_utc,
+        "schema_version": "1.0.0",
+        "source_module_id": "text_risk_scoring_service",
         "artifact_type": "truth_event",
+        "parent_hash": _CURRENT_PARENT_HASH,
         "payload": execution_payload,
     }
 
-    artifact["artifact_hash"] = compute_artifact_hash(artifact)
+    # Note: Top-level 'artifact_hash' is excluded from the POST payload to obey strict external schema rules.
+    # The external server computes and returns its own canonical hash for chaining.
 
     target_url = f"{BUCKET_SERVICE_URL.rstrip('/')}/bucket/artifact"
 
     try:
         logger.info(
-            f"Dispatching artifact to external bucket | execution_id={execution_id}",
+            f"Dispatching artifact to external bucket | execution_id={execution_id} | parent_hash={_CURRENT_PARENT_HASH}",
             extra={
                 "event_type": "bucket_dispatch_start",
                 "execution_id": execution_id,
                 "target_url": target_url,
+                "parent_hash": _CURRENT_PARENT_HASH,
             },
         )
         response = requests.post(
             target_url,
             json=artifact,
             headers={"Content-Type": "application/json"},
-            timeout=3.0,
+            timeout=30.0,
         )
+        
+        # If another concurrent execution advanced the append-only chain, resync parent_hash and retry once
+        if response.status_code == 400 and "Invalid parent_hash" in response.text:
+            logger.info("Parent hash mismatch detected on deployed server; resyncing latest chain hash and retrying...")
+            _sync_latest_parent_hash()
+            artifact["parent_hash"] = _CURRENT_PARENT_HASH
+            response = requests.post(
+                target_url,
+                json=artifact,
+                headers={"Content-Type": "application/json"},
+                timeout=30.0,
+            )
+
         response.raise_for_status()
+
+        resp_data = response.json() if response.text else {}
+        new_hash = resp_data.get("hash") or resp_data.get("artifact_hash") if isinstance(resp_data, dict) else None
+        if new_hash:
+            _CURRENT_PARENT_HASH = new_hash
+            logger.info(
+                f"Chained new parent_hash for subsequent executions: {_CURRENT_PARENT_HASH}",
+                extra={"event_type": "bucket_parent_hash_updated", "parent_hash": _CURRENT_PARENT_HASH}
+            )
 
         logger.info(
             f"Artifact successfully stored in external bucket | execution_id={execution_id}",
             extra={
                 "event_type": "bucket_dispatch_success",
                 "execution_id": execution_id,
+                "response": resp_data,
             },
         )
+        # Include returned server hash into local return object for inspection/telemetry
+        if new_hash:
+            artifact["hash"] = new_hash
+            artifact["artifact_hash"] = new_hash
         return artifact
+
 
     except requests.exceptions.RequestException as e:
         # FAIL OPEN POLICY
@@ -172,8 +230,12 @@ def get_bucket_entries(limit: int = 100, offset: int = 0) -> list[Dict[str, Any]
     target_url = f"{BUCKET_SERVICE_URL.rstrip('/')}/bucket/artifacts"
     try:
         response = requests.get(target_url, params={"limit": limit, "offset": offset}, timeout=5.0)
-        response.raise_for_status()
-        return response.json()
+        data = response.json()
+        if isinstance(data, dict) and "artifacts" in data:
+            return data["artifacts"]
+        elif isinstance(data, list):
+            return data
+        return []
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to fetch bucket entries from {target_url}: {e}")
         return []

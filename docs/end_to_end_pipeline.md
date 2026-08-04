@@ -20,17 +20,17 @@ Once the data is proven sound by DGIC, the Intelligence Core performs the actual
 * **Heuristics & Scoring:** Applies NLP heuristics, computes entropy, and evaluates contextual risk parameters.
 * **Risk Baseline:** Generates the initial Risk Score (e.g., `0.15`) and a Confidence Metric (e.g., `1.0`).
 
-## 4. Governance Constraints (Rajya Validation Engine)
-With the risk score computed, the request hits the governance checkpoint—the Rajya Engine.
-* **Policy Cross-referencing:** It cross-references the requested action (e.g., Sector 4 access) with strictly defined policies.
-* **Authorization Check:** It ensures the `actor` (e.g., `marine-intelligence-bot`) is permitted.
-* **Verdict:** Outputs a deterministic governance verdict, either `EXECUTION_APPROVED` or a flat-out rejection based on hard constraints.
-
-## 5. Token Minting (Layer 1 - Sarathi Enforcement)
-If Rajya approves, Sarathi takes over to enforce the decision cryptographically.
+## 4. Token Minting (Layer 1 - Sarathi Enforcement)
+With the risk score computed, Sarathi takes over to enforce the decision cryptographically.
 * **Data Gathering:** It bundles the risk scores, confidence metrics, and intelligence data.
-* **Trace Hash:** It generates a permanent SHA-256 `trace_hash` representing the entire state and verdict.
+* **Trace Hash:** It generates a permanent SHA-256 `trace_hash` representing the entire state and preliminary verdict.
 * **Token Signature:** It mints and cryptographically signs a Sarathi Enforcement Token. The execution cannot proceed without this valid signature.
+
+## 5. Governance Constraints (Rajya Validation Engine)
+Once Sarathi has sealed the execution state, the payload hits the absolute final governance checkpoint—the Rajya Engine.
+* **Double-Lock Consensus Check:** It inspects both the original intention (`sarathi_decision`) and Sarathi's sealed output (`enforcement_verdict`).
+* **Authorization Check:** It ensures the `actor` is permitted and the cryptographic IDs perfectly match.
+* **Verdict:** Outputs a deterministic governance verdict (`EXECUTION_APPROVED` or rejection). Core Execution will not run without this final approval.
 
 ## 6. Execution (Layer 4 - Core Execution)
 The Core Layer is the final, dumb execution point. It makes no decisions of its own; it simply obeys Sarathi.
@@ -54,6 +54,7 @@ sequenceDiagram
     participant Rajya as Rajya Validation Engine
     participant Sarathi as Sarathi Enforcement (Layer 1)
     participant Core as Core Execution (Layer 4)
+    participant Bridge as InsightBridge (Layer 6)
     participant Bucket as Bucket Ledger (Layer 5)
 
     Client->>Sutradhara: 1. POST /api/v1/sutradhara/invoke
@@ -68,15 +69,15 @@ sequenceDiagram
     Intel-->>Sutradhara: Risk Score (0.15)
     deactivate Intel
     
-    Sutradhara->>Rajya: 4. Validate Governance Constraints
-    activate Rajya
-    Rajya-->>Sutradhara: EXECUTION_APPROVED
-    deactivate Rajya
-    
-    Sutradhara->>Sarathi: 5. Mint Cryptographic Enforcement Token
+    Sutradhara->>Sarathi: 4. Mint Cryptographic Enforcement Token
     activate Sarathi
     Sarathi-->>Sutradhara: Signed Token + Trace Hash
     deactivate Sarathi
+    
+    Sutradhara->>Rajya: 5. Validate Governance Constraints (Consensus Check)
+    activate Rajya
+    Rajya-->>Sutradhara: EXECUTION_APPROVED
+    deactivate Rajya
     
     Sutradhara->>Core: 6. Hand off Execution & Token
     activate Core
@@ -91,6 +92,11 @@ sequenceDiagram
     Core-->>Sutradhara: Execution Complete
     deactivate Core
     
-    Sutradhara-->>Client: Final Verdict (JSON Response)
+    Sutradhara->>Bridge: 8. Broadcast Final Telemetry Event
+    activate Bridge
+    Bridge-->>Sutradhara: 200 OK (Observability Sync)
+    deactivate Bridge
+    
+    Sutradhara-->>Client: 9. Final Verdict (JSON Response)
     deactivate Sutradhara
 ```

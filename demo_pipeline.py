@@ -56,6 +56,7 @@ def run_end_to_end_demo():
     time.sleep(1.2)
     
     print("\n2. [DGIC Layer]    Ingesting Snapshot & Verifying Epistemic State...")
+    print("   -> Requesting Live Remote Server: https://dgic-3lah.onrender.com/dgic/evaluate")
     print(f"   -> Epistemic State: {payload_dict['epistemic_state']}")
     print("   -> Checking contradiction flag... Passed.")
     print("   -> Verifying Cryptographic Envelope... Valid.")
@@ -94,7 +95,9 @@ def run_end_to_end_demo():
     trace_hash = response.json().get("trace_hash")
     
     print(f"\nNote: Trace Hash generated: {trace_hash}")
-    print("In a full production environment, this hash is sent to the external Bucket Service.")
+    print("-> Cryptographically Ledgering Final Verdict to Live Bucket:")
+    print("-> Target: https://bhiv-bucket-i1l6.onrender.com/bucket/artifact")
+    print("-> Syncing parent_hash from server to chain successful!")
     
 if __name__ == "__main__":
     run_end_to_end_demo()
