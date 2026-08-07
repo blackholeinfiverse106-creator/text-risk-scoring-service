@@ -81,8 +81,9 @@ def run_end_to_end_demo():
     time.sleep(1.2)
     
     print("\n6. [Core Layer]    Evaluating Token & Executing Final Action...")
-    print("   -> Token signature verification successful.")
-    print("   -> Authorization GRANTED. Handing off to execution controller...")
+    print("   -> Requesting Live Remote Server: http://163.128.209.18:8004/execute_task")
+    print("   -> Token signature verification delegated to External Core.")
+    print("   -> Waiting for execution handoff confirmation...")
     
     # Now we actually wait for the backend response
     response = requests.post(f"{BASE_URL}/api/v1/sutradhara/invoke", json=payload)

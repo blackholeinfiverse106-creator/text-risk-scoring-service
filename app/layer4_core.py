@@ -112,7 +112,34 @@ def execute_core_mandala(
     # ── Gate passed: ALLOW → execute ──
     core_decision = EnforcementDecision.ALLOW
     final_failure_reason = None
-    execute_action(proposed_action, execution_id)
+    
+    import requests
+    import os
+    import json
+    
+    # LIVE EXTERNAL INTEGRATION: Trigger execution on external Core Service
+    core_url = os.environ.get("CORE_SERVICE_URL", "http://163.128.209.18:8004")
+    endpoint = f"{core_url}/execute_task"
+    
+    payload = {
+        "input": proposed_action,
+        "agent": request_payload.get("actor", "marine-intelligence-bot"),
+        "trace_id": execution_id,
+        "execution_token": json.dumps(enforcement_token.model_dump(mode="json")) if enforcement_token else ""
+    }
+    
+    try:
+        response = requests.post(endpoint, json=payload, timeout=10)
+        if response.status_code == 200:
+            logger.info(f"External Core API Success | trace_id={execution_id} | response={response.text}")
+        else:
+            core_decision = EnforcementDecision.DENY
+            final_failure_reason = f"External Core API failed with status {response.status_code}: {response.text}"
+            logger.error(final_failure_reason)
+    except Exception as e:
+        core_decision = EnforcementDecision.DENY
+        final_failure_reason = f"External Core API connection error: {str(e)}"
+        logger.error(final_failure_reason)
     logger.info(
         f"CORE EXECUTED | execution_id={execution_id} | action='{proposed_action}' | sarathi_gate=ALLOW",
         extra={
