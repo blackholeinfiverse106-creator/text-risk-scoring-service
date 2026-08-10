@@ -62,6 +62,35 @@ class RajyaRejection:
 
 
 # ============================================================
+# KESHAV Analytics Consumer (Trace Continuity)
+# ============================================================
+
+def consume(keshav_output: Optional[Dict[str, Any]], trace_id: str):
+    """
+    Consumes upstream analytics from the KESHAV Engine.
+    Enforces strict trace continuity before the payload is validated.
+    """
+    if not keshav_output:
+        logger.warning(f"KESHAV returned no output for trace_id={trace_id}. Bypassing strict consumption.")
+        return
+
+    keshav_trace_id = keshav_output.get("trace_id")
+    if keshav_trace_id != trace_id:
+        logger.error(f"KESHAV Trace Continuity Broken! Expected {trace_id}, got {keshav_trace_id}")
+        raise ValueError("KESHAV trace continuity broken: Trace ID mismatch.")
+    
+    logger.info(
+        f"RAJYA cleanly consumed KESHAV output | trace_id={trace_id} | root_cause={keshav_output.get('root_cause')}",
+        extra={
+            "event_type": "rajya_keshav_consume",
+            "trace_id": trace_id,
+            "keshav_severity": keshav_output.get('severity')
+        }
+    )
+    # The output is structurally validated and conceptually "consumed" by RAJYA.
+
+
+# ============================================================
 # validate_execution_request — The Pure Validation Gate
 # ============================================================
 

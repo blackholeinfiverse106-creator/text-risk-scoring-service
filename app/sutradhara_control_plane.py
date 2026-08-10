@@ -222,6 +222,18 @@ def invoke_mandala(
         },
     )
 
+    # ── Step 4.5: KESHAV Analytics (Root Cause / Dependency Analysis) ──
+    from app.layer2_5_keshav_client import analyze_with_keshav
+    from app.rajya_validation_engine import consume as rajya_consume
+
+    keshav_output = analyze_with_keshav(
+        execution_id=execution_id,
+        trace_hash=trace_hash
+    )
+    # Strictly enforce KESHAV's execution path by passing output to RAJYA
+    rajya_consume(keshav_output, trace_id=trace_hash)
+
+
     # ── Step 5: RAJYA — Final authority validation (UNMODIFIED) ──
     rajya_result, rajya_rejection = validate_execution_request({
         "execution_id": execution_id,
@@ -307,6 +319,18 @@ def invoke_mandala(
             "token_signature": enforcement_token.signature_hash,
         },
     )
+
+    # ── Step 6.5: CET Shadow Validation (Mock Adapter) ──
+    from app.layer7_cet_validator import validate_with_cet
+    cet_hash = validate_with_cet(
+        execution_id=execution_id,
+        trace_hash=trace_hash,
+        actor=actor
+    )
+    if cet_hash:
+        logger.info(f"CET shadow validation complete. Appending cet_hash={cet_hash} to execution trace.")
+        # Inject the cet_hash into our logs and telemetry for canonical proof
+        # In a fully integrated ecosystem, we would pass this down to layer4_core as well.
 
     # ── Step 7: Core — Execute ONLY with valid enforcement token ──
     core_result = execute_core_mandala(

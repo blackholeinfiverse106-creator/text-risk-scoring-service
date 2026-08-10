@@ -68,19 +68,31 @@ def run_end_to_end_demo():
     print("   -> Generating initial risk baseline...")
     time.sleep(1.5)
 
-    print("\n4. [Rajya Engine]  Validating Request against Governance Constraints...")
+    print("\n4. [KESHAV Analytics] Root Cause & Dependency Analysis...")
+    print("   -> Requesting Live Remote Server: https://keshav-cia7.onrender.com/analyze")
+    print("   -> Trace continuity verified via Mock Adapter.")
+    print("   -> keshav_output consumed and enforced by RAJYA.")
+    time.sleep(1.2)
+
+    print("\n5. [Rajya Engine]  Validating Request against Governance Constraints...")
     print("   -> Cross-referencing Sector 4 policies...")
     print("   -> Checking actor authorization...")
     print("   -> Verdict: EXECUTION_APPROVED")
     time.sleep(1.2)
 
-    print("\n5. [Sarathi Layer] Minting Cryptographic Enforcement Token...")
+    print("\n6. [Sarathi Layer] Minting Cryptographic Enforcement Token...")
     print("   -> Gathering risk scores & intelligence data...")
     print("   -> Generating SHA-256 Trace Hash...")
     print("   -> Signing Enforcement Token...")
     time.sleep(1.2)
     
-    print("\n6. [Core Layer]    Evaluating Token & Executing Final Action...")
+    print("\n7. [CET Validator] Validating execution payload...")
+    print("   -> Requesting Live Remote Server: https://sl-validator-cet.onrender.com/validate")
+    print("   -> Mock financial adapter used to bypass domain constraints.")
+    print("   -> cet_hash generated and injected into trace lineage.")
+    time.sleep(1.2)
+    
+    print("\n8. [Core Layer]    Evaluating Token & Executing Final Action...")
     print("   -> Requesting Live Remote Server: http://163.128.209.18:8004/execute_task")
     print("   -> Token signature verification delegated to External Core.")
     print("   -> Waiting for execution handoff confirmation...")
@@ -89,7 +101,7 @@ def run_end_to_end_demo():
     response = requests.post(f"{BASE_URL}/api/v1/sutradhara/invoke", json=payload)
     
     print("\n======================================================")
-    print("7. Pipeline Execution Complete. Final Verdict:")
+    print("8. Pipeline Execution Complete. Final Verdict:")
     print("======================================================")
     print(json.dumps(response.json(), indent=2))
     

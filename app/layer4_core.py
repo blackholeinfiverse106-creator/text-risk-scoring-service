@@ -9,6 +9,7 @@ from app.enforcement_schemas import (
     EnforcementDecision,
 )
 from app.layer5_bucket import write_execution_record
+import dataclasses
 from app.execution_controller import execute_action, block_execution
 from app.rajya_validation_engine import RajyaValidationResult
 from app.layer1_sarathi import SarathiEnforcementToken, enforce_token, SarathiHardBlockError
@@ -125,7 +126,7 @@ def execute_core_mandala(
         "input": proposed_action,
         "agent": request_payload.get("actor", "marine-intelligence-bot"),
         "trace_id": execution_id,
-        "execution_token": json.dumps(enforcement_token.model_dump(mode="json")) if enforcement_token else ""
+        "execution_token": json.dumps(dataclasses.asdict(enforcement_token)) if enforcement_token else ""
     }
     
     try:
