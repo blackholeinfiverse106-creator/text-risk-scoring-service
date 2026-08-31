@@ -1,29 +1,33 @@
 # ============================================================
-# BHIV Rajya Enforcement Gateway — Local Development Compose
+# BHIV Rajya Enforcement Gateway — Production Compose Template
+#
+# IMG_TAG is replaced at deploy time with the 7-char Git SHA.
+# Do not run this file directly — it is compiled by the CI/CD pipeline.
 # ============================================================
 
 services:
   rajya-core:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: bhiv/rajya-core:IMG_TAG
     container_name: bhiv_rajya_core
+    restart: unless-stopped
     ports:
       - "${GATEWAY_PORT:-8015}:8000"
     env_file:
       - .env
     environment:
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONUNBUFFERED=1
       - GATEWAY_PORT=${GATEWAY_PORT:-8015}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
+      interval: 15s
       timeout: 5s
       retries: 3
-      start_period: 10s
-    restart: unless-stopped
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     networks:
       - rajya_network
 
