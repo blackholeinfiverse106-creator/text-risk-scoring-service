@@ -13,6 +13,7 @@ import dataclasses
 from app.execution_controller import execute_action, block_execution
 from app.rajya_validation_engine import RajyaValidationResult
 from app.layer1_sarathi import SarathiEnforcementToken, enforce_token, SarathiHardBlockError
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +115,6 @@ def execute_core_mandala(
     core_decision = EnforcementDecision.ALLOW
     final_failure_reason = None
     
-    import requests
     import os
     import json
     

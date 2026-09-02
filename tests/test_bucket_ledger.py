@@ -56,6 +56,8 @@ def test_write_bucket_entry_success(mock_post):
     # Mock successful response
     mock_post.return_value = MagicMock()
     mock_post.return_value.raise_for_status = MagicMock()
+    mock_post.return_value.text = '{"hash": "mocked_hash"}'
+    mock_post.return_value.json.return_value = {"hash": "mocked_hash"}
 
     result = write_bucket_entry(
         execution_id="exec-abc-123",
@@ -71,7 +73,7 @@ def test_write_bucket_entry_success(mock_post):
     # Validate output
     assert result is not None
     assert result["artifact_id"] == "exec-abc-123"
-    assert result["source_module_id"] == "bhiv_enforcement_gate"
+    assert result["source_module_id"] == "text_risk_scoring_service"
     assert result["schema_version"] == "1.0.0"
     assert result["artifact_type"] == "truth_event"
     assert "artifact_hash" in result
