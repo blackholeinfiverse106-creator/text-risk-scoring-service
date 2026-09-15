@@ -28,7 +28,7 @@ from typing import Optional, Dict, Any, List
 logger = logging.getLogger(__name__)
 
 # External service configuration
-BUCKET_SERVICE_URL = os.environ.get("BUCKET_SERVICE_URL", "https://bhiv-bucket-i1l6.onrender.com")
+BUCKET_SERVICE_URL = os.environ.get("BUCKET_SERVICE_URL", "http://163.128.209.18:8012")
 
 # Chained parent hash for append-only log storage (starts as None / null)
 _CURRENT_PARENT_HASH: Optional[str] = None

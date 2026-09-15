@@ -58,7 +58,7 @@ The Sovereign Core utilizes a highly decoupled, strict-authority ecosystem mappi
 * `POST https://keshav-cia7.onrender.com/analyze`
 * `POST https://sl-validator-cet.onrender.com/validate`
 * `POST http://163.128.209.18:8004/execute_task`
-* `POST https://bhiv-bucket-i1l6.onrender.com/bucket/artifact`
+* `POST http://163.128.209.18:8012/bucket/artifact`
 * `POST https://bhiv-6.onrender.com/api/v1/flow/events`
 
 ## 8. Event Catalogue

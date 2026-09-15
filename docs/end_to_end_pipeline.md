@@ -54,7 +54,7 @@ The Core Layer is the final, dumb execution point. It makes no decisions of its 
 ## 8. Cryptographic Ledgering (Layer 5 - Bucket Ledger)
 Following execution, the system maintains a sovereign record.
 * **Final Verdict Logged:** The `trace_hash`, decision (e.g., `ALLOW`), and risk score are packaged into a final artifact.
-* **External Storage:** In a full production environment, this payload is sent over the network to the live decoupled Bucket Service (`https://bhiv-bucket-i1l6.onrender.com/bucket/artifact`) where the hash provides an immutable audit trail.
+* **External Storage:** In a full production environment, this payload is sent over the network to the live decoupled Bucket Service (`http://163.128.209.18:8012/bucket/artifact`) where the hash provides an immutable audit trail.
 
 ## Pipeline Architecture Diagram
 

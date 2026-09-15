@@ -16,7 +16,7 @@ def main():
     print("=" * 80)
     print(" [*] SOVEREIGN CORE: LIVE BUCKET SERVICE STORAGE PROOF DEMONSTRATION")
     print("=" * 80)
-    print("Target Bucket URL: https://bhiv-bucket-i1l6.onrender.com/bucket/artifact")
+    print("Target Bucket URL: http://163.128.209.18:8012/bucket/artifact")
     print("Source Module ID : text_risk_scoring_service")
     print("Storage Type     : append_only (with parent_hash cryptographic chaining)")
     print("=" * 80)

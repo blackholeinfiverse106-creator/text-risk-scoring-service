@@ -77,7 +77,7 @@ In strict adherence to BCAES, **Sovereign Core duplicates ZERO platform services
 ### 8. `app/layer5_bucket.py` (Bucket Ledger)
 * **Constitutional Layer:** Layer 5
 * **Canonical Capability:** Cryptographic persistence.
-* **BCAB Compliance:** 🟢 PASSED. Zero local file-state mutations. 100% delegated to live external endpoint `bhiv-bucket-i1l6.onrender.com`.
+* **BCAB Compliance:** 🟢 PASSED. Zero local file-state mutations. 100% delegated to live external endpoint `163.128.209.18:8012`.
 
 ### 9. `app/layer6_insightbridge.py` (InsightBridge Telemetry)
 * **Constitutional Layer:** Layer 6

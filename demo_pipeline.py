@@ -109,7 +109,7 @@ def run_end_to_end_demo():
     
     print(f"\nNote: Trace Hash generated: {trace_hash}")
     print("-> Cryptographically Ledgering Final Verdict to Live Bucket:")
-    print("-> Target: https://bhiv-bucket-i1l6.onrender.com/bucket/artifact")
+    print("-> Target: http://163.128.209.18:8012/bucket/artifact")
     print("-> Syncing parent_hash from server to chain successful!")
     
 if __name__ == "__main__":

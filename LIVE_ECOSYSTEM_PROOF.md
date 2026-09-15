@@ -32,7 +32,7 @@ Rather than simulating execution environments locally, our backend orchestrator 
 
 ## 3. Bucket Ledger (Immutable Logging)
 * **Layer:** 5 (Cryptographic Sovereign Storage)
-* **Live Target Endpoint:** `https://bhiv-bucket-i1l6.onrender.com/bucket/artifact`
+* **Live Target Endpoint:** `http://163.128.209.18:8012/bucket/artifact`
 * **Data Exchanged:**
   * **We Send:** The final `trace_hash`, the enforcement decision (`ALLOW`/`DENY`), risk scores, and the original snapshot payload (with `parent_hash` removed/synchronized to meet schema constraints).
   * **We Receive:** Successful insertion into the remote MongoDB cluster via the Bucket API.

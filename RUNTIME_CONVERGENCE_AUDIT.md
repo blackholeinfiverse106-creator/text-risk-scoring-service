@@ -13,7 +13,7 @@
   * DGIC (`https://dgic-3lah.onrender.com`)
   * CET (`https://sl-validator-cet.onrender.com`)
   * Core Target (`http://163.128.209.18:8004`)
-  * Bucket (`https://bhiv-bucket-i1l6.onrender.com`)
+  * Bucket (`http://163.128.209.18:8012`)
   * InsightBridge (`https://bhiv-6.onrender.com`)
 
 ### 2. E2E PROOF
