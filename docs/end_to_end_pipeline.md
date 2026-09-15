@@ -48,12 +48,13 @@ Before final execution, the pipeline consults the external CET Engine for a math
 The Core Layer is the final, dumb execution point. It makes no decisions of its own; it simply obeys Sarathi.
 * **Verification:** Core evaluates the cryptographic signature of the Sarathi Enforcement Token. If invalid or missing, it triggers a `SarathiHardBlockError`.
 * **Handoff:** If the token signature is valid, authorization is GRANTED.
-* **Final Execution:** The requested payload action is finally executed by the execution controller.
+* **Remote Execution:** The requested payload action is securely dispatched over the network to the live remote execution engine (`http://163.128.209.18:8004/execute_task`).
+* **Fail-Safe Degradation:** If the remote API crashes (e.g., returns a 500 error due to external schema issues), Layer 4 absorbs the failure and gracefully degrades the sequence into a fail-safe `DENY` enforcement action without crashing the pipeline.
 
 ## 8. Cryptographic Ledgering (Layer 5 - Bucket Ledger)
 Following execution, the system maintains a sovereign record.
 * **Final Verdict Logged:** The `trace_hash`, decision (e.g., `ALLOW`), and risk score are packaged into a final artifact.
-* **External Storage:** In a full production environment, this payload is sent over the network to the strictly decoupled Bucket Service (`http://localhost:8000/bucket/artifact`) where the hash provides an immutable audit trail.
+* **External Storage:** In a full production environment, this payload is sent over the network to the live decoupled Bucket Service (`https://bhiv-bucket-i1l6.onrender.com/bucket/artifact`) where the hash provides an immutable audit trail.
 
 ## Pipeline Architecture Diagram
 
@@ -68,6 +69,7 @@ sequenceDiagram
     participant Rajya as Rajya Validation Engine
     participant CET as CET Validator (Layer 7)
     participant Core as Core Execution (Layer 4)
+    participant ExternalEngine as Live Remote Core API
     participant Bridge as InsightBridge (Layer 6)
     participant Bucket as Bucket Ledger (Layer 5)
 
@@ -106,7 +108,10 @@ sequenceDiagram
     Sutradhara->>Core: 8. Hand off Execution & Token
     activate Core
     Core->>Core: Verify Token Signature
-    Core->>Core: Execute Requested Action
+    Core->>ExternalEngine: 8b. Dispatch over network (163.128.209.18:8004)
+    activate ExternalEngine
+    ExternalEngine-->>Core: 200 OK / 500 Error (Degrades to DENY)
+    deactivate ExternalEngine
     
     Core->>Bucket: 9. Ledger Final Verdict & Trace Hash
     activate Bucket
