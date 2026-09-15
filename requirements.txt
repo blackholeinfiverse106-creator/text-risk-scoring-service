@@ -1,8 +1,9 @@
-# BHIV Enforcement Gateway — Production Dependencies
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-pydantic==2.9.2
-python-multipart==0.0.12
-requests==2.32.3
-PyJWT==2.10.1
-cryptography==45.0.5
+fastapi==0.115.8
+uvicorn[standard]==0.34.0
+pydantic==2.13.3
+pydantic-core==2.46.3
+requests==2.34.2
+python-dotenv==1.2.2
+cryptography==49.0.0
+pytest==9.0.3
+pytest-asyncio==0.24.0
