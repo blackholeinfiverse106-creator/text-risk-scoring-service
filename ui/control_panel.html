@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sovereign Core - Control Panel</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --surface: #1e293b;
+            --primary: #3b82f6;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #334155;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+        h1, h2, h3 { margin: 0; font-weight: 500; }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1rem;
+        }
+        .status-badge {
+            padding: 0.5rem 1rem;
+            border-radius: 999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+        .card h2 { font-size: 1.125rem; margin-bottom: 1rem; color: var(--text-muted); }
+        .table-container {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+            text-align: left;
+        }
+        th, td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        th { color: var(--text-muted); font-weight: 600; }
+        tr:last-child td { border-bottom: none; }
+        
+        .badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+        .badge.allow { background: rgba(16, 185, 129, 0.2); color: var(--success); }
+        .badge.deny { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+        .badge.abstain { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+        
+        pre {
+            background: #000;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            color: #a5b4fc;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div>
+            <h1>Sovereign Core Control Panel</h1>
+            <div style="color: var(--text-muted); margin-top: 0.5rem;">Independent Observational Boundary • No Execution Authority</div>
+        </div>
+        <div class="status-badge" id="health-status">Checking Health...</div>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <h2>Niyantran Canonical State Stream</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Execution ID</th>
+                            <th>Status</th>
+                            <th>RAJYA Verdict</th>
+                            <th>Risk</th>
+                            <th>Bucket Ledger</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trace-list">
+                        <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Waiting for traces...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card">
+            <h2>Detailed Inspector</h2>
+            <pre id="trace-details">Select a trace to view full canonical state...</pre>
+        </div>
+    </div>
+
+    <script>
+        let currentTraces = [];
+
+        async function fetchHealth() {
+            try {
+                const res = await fetch('/health');
+                const data = await res.json();
+                const badge = document.getElementById('health-status');
+                if (data.status === 'ok') {
+                    badge.textContent = '● SYSTEM HEALTHY';
+                    badge.style.color = 'var(--success)';
+                    badge.style.borderColor = 'var(--success)';
+                } else {
+                    badge.textContent = '● DEGRADED';
+                    badge.style.color = 'var(--warning)';
+                    badge.style.borderColor = 'var(--warning)';
+                }
+            } catch (err) {
+                const badge = document.getElementById('health-status');
+                badge.textContent = '● DISCONNECTED';
+                badge.style.color = 'var(--danger)';
+                badge.style.borderColor = 'var(--danger)';
+            }
+        }
+
+        async function fetchTraces() {
+            try {
+                const res = await fetch('/api/v1/niyantran/traces');
+                const traces = await res.json();
+                currentTraces = traces;
+                renderTraces();
+            } catch (err) {
+                console.error("Failed to fetch traces", err);
+            }
+        }
+
+        function renderTraces() {
+            const tbody = document.getElementById('trace-list');
+            if (currentTraces.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">No executions found.</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = '';
+            currentTraces.forEach((trace, idx) => {
+                const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                tr.onclick = () => showDetails(idx);
+                
+                const rajyaClass = trace.rajya_verdict === 'EXECUTION_APPROVED' ? 'allow' : 
+                                   (trace.rajya_verdict === 'DENY' ? 'deny' : 'abstain');
+                const statusClass = trace.execution_status === 'COMPLETED' ? 'allow' : 'deny';
+
+                tr.innerHTML = `
+                    <td style="font-family: monospace;">${trace.execution_id.substring(0, 14)}...</td>
+                    <td><span class="badge ${statusClass}">${trace.execution_status || 'UNKNOWN'}</span></td>
+                    <td><span class="badge ${rajyaClass}">${trace.rajya_verdict || 'N/A'}</span></td>
+                    <td>${trace.risk_score !== undefined ? trace.risk_score.toFixed(2) : '-'}</td>
+                    <td>${trace.bucket_persistence ? '✅ Logged' : '❌ Failed'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function showDetails(idx) {
+            const trace = currentTraces[idx];
+            document.getElementById('trace-details').textContent = JSON.stringify(trace, null, 2);
+        }
+
+        // Poll every 3 seconds
+        setInterval(fetchHealth, 5000);
+        setInterval(fetchTraces, 3000);
+        fetchHealth();
+        fetchTraces();
+    </script>
+</body>
+</html>
