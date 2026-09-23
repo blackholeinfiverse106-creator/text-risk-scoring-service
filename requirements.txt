@@ -1,6 +1,6 @@
 # ── Core Runtime ──────────────────────────────────────────────
 fastapi==0.115.8
-starlette==0.38.6
+starlette==0.45.3
 uvicorn[standard]==0.34.0
 
 # ── Data Validation ───────────────────────────────────────────
