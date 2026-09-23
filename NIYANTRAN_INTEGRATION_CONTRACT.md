@@ -20,7 +20,7 @@ Niyantran Kendra's role is **observational only** — it reads the execution sta
 ## 2. Live Deployment Endpoint
 
 ```
-Base URL: http://163.128.209.18:8000
+Base URL: http://163.128.209.18:8015
 ```
 
 > All endpoints listed below are relative to this base URL.
@@ -178,7 +178,7 @@ Since Sovereign Core is not pushing events (it is a request-response service), N
 ```javascript
 // Poll traces every 3 seconds
 setInterval(async () => {
-  const response = await fetch("http://163.128.209.18:8000/api/v1/niyantran/traces");
+  const response = await fetch("http://163.128.209.18:8015/api/v1/niyantran/traces");
   const traces = await response.json();
   // Update your dashboard state with `traces`
 }, 3000);
@@ -188,7 +188,7 @@ setInterval(async () => {
 ```javascript
 // Check health every 10 seconds
 setInterval(async () => {
-  const response = await fetch("http://163.128.209.18:8000/health");
+  const response = await fetch("http://163.128.209.18:8015/health");
   const data = await response.json();
   setSystemStatus(data.status === "ok" ? "HEALTHY" : "DEGRADED");
 }, 10000);
